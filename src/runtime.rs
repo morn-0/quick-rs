@@ -43,13 +43,10 @@ impl Runtime {
                     .to_string();
 
                 if let Ok(source) = fs::read_to_string(&module_name) {
-                    const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE
-                        | sys::JS_EVAL_FLAG_STRICT
-                        | sys::JS_EVAL_FLAG_COMPILE_ONLY)
-                        as i32;
+                    const FLAGS: u32 = sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY;
                     let ctx = ManuallyDrop::new(Context(ctx));
 
-                    return match ctx.eval(source.as_str(), module_name.as_str(), FLAGS) {
+                    return match ctx.eval(source.as_str(), module_name.as_str(), FLAGS as i32) {
                         Ok(value) => value.ptr() as *mut sys::JSModuleDef,
                         Err(e) => {
                             error!("{e}");
