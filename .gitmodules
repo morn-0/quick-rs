@@ -1,0 +1,3 @@
+[submodule "sys/embedded/quickjs"]
+	path = sys/embedded/quickjs
+	url = https://github.com/bellard/quickjs.git
