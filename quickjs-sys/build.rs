@@ -30,7 +30,7 @@ fn main() {
     }
     copy_dir::copy_dir(quickjs, &code_path).unwrap();
 
-    fs::copy("static-function.c", code_path.join("static-function.c")).unwrap();
+    fs::copy("static-functions.c", code_path.join("static-functions.c")).unwrap();
 
     let patch = embed.join("patch");
     for patch in fs::read_dir(patch).unwrap() {
@@ -54,7 +54,7 @@ fn main() {
                 "libunicode.c",
                 "quickjs-libc.c",
                 "quickjs.c",
-                "static-function.c",
+                "static-functions.c",
             ]
             .iter()
             .map(|f| code_path.join(f)),
