@@ -6,4 +6,6 @@ pub enum EvalError {
     CodeError(String),
     #[error("ExecuteError {0}")]
     ExecuteError(String),
+    #[error("CStringError {0}")]
+    CStringError(String),
 }

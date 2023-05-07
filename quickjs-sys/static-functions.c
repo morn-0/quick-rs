@@ -5,6 +5,11 @@ JSValueConst JS_GetModuleExport_real(JSContext *ctx, JSModuleDef *m, const char 
     return JS_GetModuleExport(ctx, m, export_name);
 }
 
+JSValue JS_MKVAL_real(int tag, int val)
+{
+    return JS_MKVAL(tag, val);
+}
+
 int JS_ValueGetTag_real(JSValue v)
 {
     return JS_VALUE_GET_TAG(v);

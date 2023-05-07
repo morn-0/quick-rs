@@ -6,17 +6,9 @@ use crate::{
 };
 use log::error;
 use quickjs_sys as sys;
-use std::ffi::{c_char, CString};
+use std::ffi::CString;
 
 const SYS_MOD: &str = r#"import * as std from 'std';import * as os from 'os';globalThis.std = std;globalThis.os = os;"#;
-
-extern "C" {
-    pub fn JS_GetModuleExport_real(
-        ctx: *mut sys::JSContext,
-        m: *mut sys::JSModuleDef,
-        export_name: *const c_char,
-    ) -> sys::JSValue;
-}
 
 pub struct Context(pub *mut sys::JSContext);
 
@@ -54,7 +46,7 @@ impl Context {
     pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, EvalError> {
         let (c_src, c_name) = match (CString::new(src), CString::new(name)) {
             (Ok(c_src), Ok(c_name)) => (c_src, c_name),
-            _ => return Err(EvalError::CodeError(src.to_string())),
+            _ => return Err(EvalError::CStringError(src.to_string())),
         };
 
         unsafe {

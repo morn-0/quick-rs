@@ -1,13 +1,17 @@
+use crate::util;
+use once_cell::sync::Lazy;
 use quickjs_sys as sys;
 use std::ffi::c_void;
 
-use crate::util;
+pub static UNDEFINED: Lazy<sys::JSValue> =
+    Lazy::new(|| unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) });
 
 extern "C" {
+    pub fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
     fn JS_ValueGetTag_real(v: sys::JSValue) -> i32;
     fn JS_ValueGetPtr_real(v: sys::JSValue) -> *mut c_void;
-    fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
-    fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
+    pub fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
+    pub fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
 }
 
 pub struct JSValueRef {
@@ -54,9 +58,18 @@ pub struct Exception(pub JSValueRef);
 
 impl ToString for Exception {
     fn to_string(&self) -> String {
-        let name = util::to_string(util::to_property(self.0.clone(), "name\0".as_ptr() as *const _));
-        let message = util::to_string(util::to_property(self.0.clone(), "message\0".as_ptr() as *const _));
-        let stack = util::to_string(util::to_property(self.0.clone(), "stack\0".as_ptr() as *const _));
+        let name = util::to_string(util::to_property(
+            self.0.clone(),
+            "name\0".as_ptr() as *const _,
+        ));
+        let message = util::to_string(util::to_property(
+            self.0.clone(),
+            "message\0".as_ptr() as *const _,
+        ));
+        let stack = util::to_string(util::to_property(
+            self.0.clone(),
+            "stack\0".as_ptr() as *const _,
+        ));
         format!("{name} {message} {stack}")
     }
 }
