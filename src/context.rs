@@ -1,7 +1,6 @@
 use crate::{
     error::EvalError,
     runtime::Runtime,
-    util,
     value::{Exception, JSValueRef},
 };
 use log::error;
@@ -24,7 +23,8 @@ impl Context {
         };
         let ctx = Context(ctx);
 
-        if let Err(e) = ctx.eval_module(SYS_MOD, "SYS_MOD") {
+        const FLAGS: i32 = sys::JS_EVAL_TYPE_MODULE as i32;
+        if let Err(e) = ctx.eval(SYS_MOD, "SYS_MOD", FLAGS) {
             error!("{e}");
         }
 
@@ -34,13 +34,12 @@ impl Context {
 
 impl Context {
     pub fn eval_module(&self, src: &str, name: &str) -> Result<JSValueRef, EvalError> {
-        const FLAGS: i32 = sys::JS_EVAL_TYPE_MODULE as i32;
+        const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY) as i32;
         self.eval(src, name, FLAGS)
     }
 
-    pub fn eval_global(&self, src: &str, name: &str) -> Result<String, EvalError> {
-        let result = self.eval(src, name, sys::JS_EVAL_TYPE_GLOBAL as i32);
-        result.map(|value| util::to_string(value))
+    pub fn eval_global(&self, src: &str, name: &str) -> Result<JSValueRef, EvalError> {
+        self.eval(src, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
     pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, EvalError> {
