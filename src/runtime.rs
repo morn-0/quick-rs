@@ -21,9 +21,9 @@ impl Runtime {
             sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 8);
 
             #[cfg(target_pointer_width = "32")]
-            sys::JS_SetMaxStackSize(rt, 1024 * 512);
+            sys::JS_SetMaxStackSize(rt, 1024 * 1024 * 2);
             #[cfg(target_pointer_width = "64")]
-            sys::JS_SetMaxStackSize(rt, 1024 * 1024);
+            sys::JS_SetMaxStackSize(rt, 1024 * 1024 * 4);
 
             extern "C" fn module_normalize(
                 ctx: *mut sys::JSContext,
