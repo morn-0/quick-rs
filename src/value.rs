@@ -1,4 +1,4 @@
-use crate::util;
+use crate::{error::QuickError, util};
 use once_cell::sync::Lazy;
 use quickjs_sys as sys;
 use std::ffi::c_void;
@@ -7,11 +7,11 @@ pub static UNDEFINED: Lazy<sys::JSValue> =
     Lazy::new(|| unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) });
 
 extern "C" {
-    pub fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
+    pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
     fn JS_ValueGetTag_real(v: sys::JSValue) -> i32;
     fn JS_ValueGetPtr_real(v: sys::JSValue) -> *mut c_void;
-    pub fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
-    pub fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
+    pub(crate) fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
+    pub(crate) fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
 }
 
 pub struct JSValueRef {
@@ -26,6 +26,19 @@ impl JSValueRef {
         let tag = unsafe { JS_ValueGetTag_real(val) };
         let ptr = unsafe { JS_ValueGetPtr_real(val) };
         JSValueRef { ctx, tag, ptr, val }
+    }
+
+    #[inline(always)]
+    pub fn is_exception(&self) -> bool {
+        self.tag == sys::JS_TAG_EXCEPTION
+    }
+
+    pub fn to_string(&self) -> Result<String, QuickError> {
+        if self.tag == sys::JS_TAG_STRING {
+            Ok(util::to_string(self.clone()))
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
     }
 
     #[inline(always)]

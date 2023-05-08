@@ -1,11 +1,13 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum EvalError {
+pub enum QuickError {
     #[error("CodeError {0}")]
     CodeError(String),
-    #[error("ExecuteError {0}")]
-    ExecuteError(String),
+    #[error("EvalError {0}")]
+    EvalError(String),
     #[error("CStringError {0}")]
     CStringError(String),
+    #[error("UnsupportedTypeError {0}")]
+    UnsupportedTypeError(i32),
 }

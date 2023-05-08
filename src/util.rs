@@ -3,12 +3,18 @@ use quickjs_sys as sys;
 use std::{ffi::c_char, slice};
 
 pub fn to_string(value: JSValueRef) -> String {
-    let buf = unsafe {
+    let (data, len) = unsafe {
         let mut len = 0;
         let data = sys::JS_ToCStringLen2(value.ctx, &mut len, value.val, 0) as *const _;
-        slice::from_raw_parts(data, len)
+        (data, len)
     };
-    String::from_utf8_lossy(buf).to_string()
+    let buf = unsafe { slice::from_raw_parts(data, len) };
+
+    let string = String::from_utf8_lossy(buf).to_string();
+    unsafe {
+        sys::JS_FreeCString(value.ctx, data as *const _);
+    }
+    string
 }
 
 pub fn to_property(value: JSValueRef, prop: *const c_char) -> JSValueRef {

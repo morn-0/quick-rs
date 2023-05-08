@@ -1,5 +1,5 @@
 use crate::{
-    error::EvalError,
+    error::QuickError,
     runtime::Runtime,
     value::{Exception, JSValueRef},
 };
@@ -33,19 +33,19 @@ impl Context {
 }
 
 impl Context {
-    pub fn eval_module(&self, src: &str, name: &str) -> Result<JSValueRef, EvalError> {
+    pub fn eval_module(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
         const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY) as i32;
         self.eval(src, name, FLAGS)
     }
 
-    pub fn eval_global(&self, src: &str, name: &str) -> Result<JSValueRef, EvalError> {
+    pub fn eval_global(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
         self.eval(src, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
-    pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, EvalError> {
+    pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, QuickError> {
         let (c_src, c_name) = match (CString::new(src), CString::new(name)) {
             (Ok(c_src), Ok(c_name)) => (c_src, c_name),
-            _ => return Err(EvalError::CStringError(src.to_string())),
+            _ => return Err(QuickError::CStringError(src.to_string())),
         };
 
         unsafe {
@@ -56,11 +56,21 @@ impl Context {
                 let value = sys::JS_GetException(self.0);
                 let value = JSValueRef::from_js_value(self.0, value);
 
-                Err(EvalError::ExecuteError(Exception(value).to_string()))
+                Err(QuickError::EvalError(Exception(value).to_string()))
             } else {
                 Ok(value)
             }
         }
+    }
+
+    pub fn new_string(&self, value: &str) -> Result<JSValueRef, QuickError> {
+        let c_value = match CString::new(value) {
+            Ok(c_value) => c_value,
+            Err(e) => return Err(QuickError::CStringError(e.to_string())),
+        };
+
+        let value = unsafe { sys::JS_NewString(self.0, c_value.as_ptr()) };
+        Ok(JSValueRef::from_js_value(self.0, value))
     }
 }
 

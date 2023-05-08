@@ -1,5 +1,5 @@
 use crate::{
-    error::EvalError,
+    error::QuickError,
     value::{self, Exception, JSValueRef, UNDEFINED},
 };
 use anyhow::Result;
@@ -14,7 +14,12 @@ impl Function {
         Ok(Function { value })
     }
 
-    pub fn call(&self, args: Vec<sys::JSValue>) -> Result<JSValueRef, EvalError> {
+    pub fn call(&self, args: Vec<JSValueRef>) -> Result<JSValueRef, QuickError> {
+        let args = args
+            .iter()
+            .map(|arg| arg.val)
+            .collect::<Vec<sys::JSValue>>();
+
         let value = unsafe {
             let undefined = *UNDEFINED;
 
@@ -27,9 +32,6 @@ impl Function {
             );
 
             value::JS_FreeValue_real(self.value.ctx, undefined);
-            for arg in args {
-                value::JS_FreeValue_real(self.value.ctx, arg);
-            }
 
             result
         };
@@ -39,7 +41,7 @@ impl Function {
             let value = unsafe { sys::JS_GetException(self.value.ctx) };
             let value = JSValueRef::from_js_value(self.value.ctx, value);
 
-            Err(EvalError::ExecuteError(Exception(value).to_string()))
+            Err(QuickError::EvalError(Exception(value).to_string()))
         } else {
             Ok(value)
         }
