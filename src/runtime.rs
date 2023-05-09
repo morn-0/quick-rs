@@ -5,6 +5,7 @@ use std::{
     ffi::{c_char, c_void, CStr},
     fs,
     mem::ManuallyDrop,
+    path::Path,
     ptr::null_mut,
 };
 
@@ -42,10 +43,26 @@ impl Runtime {
                     .to_string_lossy()
                     .to_string();
 
-                if let Ok(source) = fs::read_to_string(&module_name) {
+                fn is_http_url(url: &str) -> bool {
+                    url.starts_with("https://") || url.starts_with("http://")
+                }
+
+                let src = if is_http_url(&module_name) {
+                    if let Ok(request) = reqwest::blocking::get(&module_name) {
+                        request.text().ok()
+                    } else {
+                        None
+                    }
+                } else if Path::new(&module_name).exists() {
+                    fs::read_to_string(&module_name).ok()
+                } else {
+                    None
+                };
+
+                if let Some(src) = src {
                     let ctx = ManuallyDrop::new(Context(ctx));
 
-                    return match ctx.eval_module(source.as_str(), module_name.as_str()) {
+                    return match ctx.eval_module(src.as_str(), module_name.as_str()) {
                         Ok(value) => value.ptr() as *mut sys::JSModuleDef,
                         Err(e) => {
                             error!("{e}");
