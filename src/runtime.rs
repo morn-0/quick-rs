@@ -68,6 +68,12 @@ impl Runtime {
 
         Self(rt)
     }
+
+    pub fn gc(&self) {
+        unsafe {
+            sys::JS_RunGC(self.0);
+        }
+    }
 }
 
 impl Drop for Runtime {
