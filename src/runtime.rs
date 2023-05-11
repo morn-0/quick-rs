@@ -17,9 +17,9 @@ impl Runtime {
             let rt = sys::JS_NewRuntime();
 
             #[cfg(target_pointer_width = "32")]
-            sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 4);
+            sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 16);
             #[cfg(target_pointer_width = "64")]
-            sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 8);
+            sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 32);
 
             #[cfg(target_pointer_width = "32")]
             sys::JS_SetMaxStackSize(rt, 1024 * 1024);
