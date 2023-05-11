@@ -17,7 +17,6 @@ fn main() {
         .allowlist_var("JS_.*")
         .allowlist_type("JS.*")
         .opaque_type("FILE")
-        .opaque_type("JSValue")
         .blocklist_type("FILE")
         .blocklist_function("JS_DumpMemoryUsage")
         .generate()

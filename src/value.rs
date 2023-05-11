@@ -1,10 +1,6 @@
 use crate::{error::QuickError, util};
-use once_cell::sync::Lazy;
 use quickjs_sys as sys;
 use std::ffi::c_void;
-
-pub static UNDEFINED: Lazy<sys::JSValue> =
-    Lazy::new(|| unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) });
 
 extern "C" {
     pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
@@ -83,6 +79,7 @@ impl ToString for Exception {
             self.0.clone(),
             "stack\0".as_ptr() as *const _,
         ));
+
         format!("{name} {message} {stack}")
     }
 }

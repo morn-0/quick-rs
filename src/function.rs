@@ -1,6 +1,6 @@
 use crate::{
     error::QuickError,
-    value::{self, Exception, JSValueRef, UNDEFINED},
+    value::{self, Exception, JSValueRef, JS_MKVAL_real},
 };
 use anyhow::Result;
 use quickjs_sys as sys;
@@ -21,7 +21,7 @@ impl Function {
             .collect::<Vec<sys::JSValue>>();
 
         let value = unsafe {
-            let undefined = *UNDEFINED;
+            let undefined = JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0);
 
             let result = sys::JS_Call(
                 self.value.ctx,
