@@ -1,4 +1,4 @@
-use crate::context::Context;
+use crate::{context::Context, util};
 use log::error;
 use quickjs_sys as sys;
 use std::{
@@ -9,6 +9,51 @@ use std::{
     ptr::null_mut,
 };
 
+extern "C" fn module_normalize(
+    ctx: *mut sys::JSContext,
+    _module_base_name: *const c_char,
+    module_name: *const c_char,
+    _opaque: *mut c_void,
+) -> *mut c_char {
+    unsafe { sys::js_strdup(ctx, module_name) }
+}
+
+extern "C" fn module_loader(
+    ctx: *mut sys::JSContext,
+    module_name: *const c_char,
+    _opaque: *mut c_void,
+) -> *mut sys::JSModuleDef {
+    let module_name = unsafe { CStr::from_ptr(module_name) }
+        .to_string_lossy()
+        .to_string();
+
+    let src = if util::is_url(&module_name) {
+        if let Ok(request) = reqwest::blocking::get(&module_name) {
+            request.text().ok()
+        } else {
+            None
+        }
+    } else if Path::new(&module_name).exists() {
+        fs::read_to_string(&module_name).ok()
+    } else {
+        None
+    };
+
+    if let Some(src) = src {
+        let ctx = ManuallyDrop::new(Context(ctx));
+
+        return match ctx.eval_module(src.as_str(), module_name.as_str()) {
+            Ok(value) => value.ptr() as *mut sys::JSModuleDef,
+            Err(e) => {
+                error!("{e}");
+                null_mut()
+            }
+        };
+    }
+
+    null_mut()
+}
+
 pub struct Runtime(pub *mut sys::JSRuntime);
 
 impl Runtime {
@@ -17,62 +62,15 @@ impl Runtime {
             let rt = sys::JS_NewRuntime();
 
             #[cfg(target_pointer_width = "32")]
-            sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 16);
+            let heap_size = 1024 * 1024 * 16;
             #[cfg(target_pointer_width = "64")]
-            sys::JS_SetMemoryLimit(rt, 1024 * 1024 * 32);
-
+            let heap_size = 1024 * 1024 * 32;
+            sys::JS_SetMemoryLimit(rt, heap_size);
             #[cfg(target_pointer_width = "32")]
-            sys::JS_SetMaxStackSize(rt, 1024 * 1024);
+            let stack_size = 1024 * 1024;
             #[cfg(target_pointer_width = "64")]
-            sys::JS_SetMaxStackSize(rt, 1024 * 1024 * 2);
-
-            extern "C" fn module_normalize(
-                ctx: *mut sys::JSContext,
-                _module_base_name: *const c_char,
-                module_name: *const c_char,
-                _opaque: *mut c_void,
-            ) -> *mut c_char {
-                unsafe { sys::js_strdup(ctx, module_name) }
-            }
-            extern "C" fn module_loader(
-                ctx: *mut sys::JSContext,
-                module_name: *const c_char,
-                _opaque: *mut c_void,
-            ) -> *mut sys::JSModuleDef {
-                let module_name = unsafe { CStr::from_ptr(module_name) }
-                    .to_string_lossy()
-                    .to_string();
-
-                fn is_http_url(url: &str) -> bool {
-                    url.starts_with("https://") || url.starts_with("http://")
-                }
-
-                let src = if is_http_url(&module_name) {
-                    if let Ok(request) = reqwest::blocking::get(&module_name) {
-                        request.text().ok()
-                    } else {
-                        None
-                    }
-                } else if Path::new(&module_name).exists() {
-                    fs::read_to_string(&module_name).ok()
-                } else {
-                    None
-                };
-
-                if let Some(src) = src {
-                    let ctx = ManuallyDrop::new(Context(ctx));
-
-                    return match ctx.eval_module(src.as_str(), module_name.as_str()) {
-                        Ok(value) => value.ptr() as *mut sys::JSModuleDef,
-                        Err(e) => {
-                            error!("{e}");
-                            null_mut()
-                        }
-                    };
-                }
-
-                null_mut()
-            }
+            let stack_size = 1024 * 1024 * 2;
+            sys::JS_SetMaxStackSize(rt, stack_size);
             sys::JS_SetModuleLoaderFunc(
                 rt,
                 Some(module_normalize),

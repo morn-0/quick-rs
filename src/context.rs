@@ -11,14 +11,16 @@ const SYS_MOD: &str = r#"import * as std from 'std';import * as os from 'os';glo
 
 pub struct Context(pub *mut sys::JSContext);
 
-impl Context {
-    pub fn new(rt: &Runtime) -> Self {
+impl From<&Runtime> for Context {
+    fn from(value: &Runtime) -> Self {
         let ctx = unsafe {
-            let ctx = sys::JS_NewContext(rt.0);
-            sys::js_std_init_handlers(rt.0);
+            let ctx = sys::JS_NewContext(value.0);
+
+            sys::js_std_init_handlers(value.0);
             sys::JS_EnableBignumExt(ctx, 1);
             sys::js_init_module_std(ctx, "std\0".as_ptr() as *const _);
             sys::js_init_module_os(ctx, "os\0".as_ptr() as *const _);
+
             ctx
         };
         let ctx = Context(ctx);
