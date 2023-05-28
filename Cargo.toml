@@ -15,4 +15,10 @@ reqwest = { version = "0.11", features = [
     "blocking",
     "rustls-tls-webpki-roots",
 ], default-features = false }
+once_cell = { version = "1", features = ["std"], default-features = false }
+image = { version = "0.24", features = ["ico"], default-features = false }
+imageproc = { version = "0.23", default-features = false }
+image_hasher = { version = "1", default-features = false }
+fast_qr = { version = "0.9", features = ["image"], default-features = false }
+barcoders = { version = "1", features = ["image"], default-features = false }
 

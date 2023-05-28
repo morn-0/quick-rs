@@ -4,6 +4,8 @@ use std::ffi::c_void;
 
 extern "C" {
     pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
+    fn JS_VALUE_GET_INT_real(val: sys::JSValue) -> i32;
+    fn JS_VALUE_GET_FLOAT64_real(val: sys::JSValue) -> f64;
     fn JS_ValueGetTag_real(v: sys::JSValue) -> i32;
     fn JS_ValueGetPtr_real(v: sys::JSValue) -> *mut c_void;
     pub(crate) fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
@@ -32,6 +34,22 @@ impl JSValueRef {
     pub fn to_string(&self) -> Result<String, QuickError> {
         if self.tag == sys::JS_TAG_STRING {
             Ok(util::to_string(self.clone()))
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
+    }
+
+    pub fn to_i32(&self) -> Result<i32, QuickError> {
+        if self.tag == sys::JS_TAG_INT {
+            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) })
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
+    }
+
+    pub fn to_f64(&self) -> Result<f64, QuickError> {
+        if self.tag == sys::JS_TAG_FLOAT64 {
+            Ok(unsafe { JS_VALUE_GET_FLOAT64_real(self.val) })
         } else {
             Err(QuickError::UnsupportedTypeError(self.tag))
         }

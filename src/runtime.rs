@@ -1,4 +1,4 @@
-use crate::{context::Context, util};
+use crate::{context::Context, extensions::EXTENSION_MAP, util};
 use log::error;
 use quickjs_sys as sys;
 use std::{
@@ -26,6 +26,10 @@ extern "C" fn module_loader(
     let module_name = unsafe { CStr::from_ptr(module_name) }
         .to_string_lossy()
         .to_string();
+
+    if let Some(extension) = EXTENSION_MAP.get(&module_name) {
+        return extension.load(ctx);
+    }
 
     let src = if util::is_url(&module_name) {
         if let Ok(request) = reqwest::blocking::get(&module_name) {
