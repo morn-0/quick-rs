@@ -145,7 +145,7 @@ unsafe extern "C" fn image(
         return value;
     }
 
-    return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
+    value::JS_MKVAL_real(sys::JS_TAG_NULL, 0)
 }
 
 /// data
@@ -211,7 +211,7 @@ unsafe extern "C" fn qrcode(
         }
     }
 
-    return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
+    value::JS_MKVAL_real(sys::JS_TAG_NULL, 0)
 }
 
 /// data
@@ -270,7 +270,7 @@ unsafe extern "C" fn barcode(
         }
     }
 
-    return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
+    value::JS_MKVAL_real(sys::JS_TAG_NULL, 0)
 }
 
 /// mode: 1 - esc, 2 - zpl

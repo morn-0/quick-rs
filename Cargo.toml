@@ -21,4 +21,5 @@ imageproc = { version = "0.23", default-features = false }
 image_hasher = { version = "1", default-features = false }
 fast_qr = { version = "0.9", features = ["image"], default-features = false }
 barcoders = { version = "1", features = ["image"], default-features = false }
+plotters = { git = "https://github.com/plotters-rs/plotters.git", features = ["bitmap_backend","bitmap_encoder","ab_glyph"], default-features = false }
 
