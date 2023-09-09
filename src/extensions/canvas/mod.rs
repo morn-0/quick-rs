@@ -1,6 +1,6 @@
 use crate::{
     context::Context,
-    extensions::{AsExtension, Extension},
+    extensions::{bind_function, AsExtension, Extension},
     value::{self, JSValueRef},
 };
 use log::error;
@@ -20,24 +20,8 @@ impl Extension for CanvasExtension {
             ctx: *mut sys::JSContext,
             module: *mut sys::JSModuleDef,
         ) -> c_int {
-            let function = sys::JS_NewCFunction2(
-                ctx,
-                Some(new),
-                "new\0".as_ptr() as *const _,
-                2,
-                sys::JSCFunctionEnum_JS_CFUNC_generic,
-                sys::JSCFunctionEnum_JS_CFUNC_generic_magic as i32,
-            );
-            sys::JS_SetModuleExport(ctx, module, "new\0".as_ptr() as *const _, function);
-            let function = sys::JS_NewCFunction2(
-                ctx,
-                Some(drop),
-                "drop\0".as_ptr() as *const _,
-                1,
-                sys::JSCFunctionEnum_JS_CFUNC_generic,
-                sys::JSCFunctionEnum_JS_CFUNC_generic_magic as i32,
-            );
-            sys::JS_SetModuleExport(ctx, module, "drop\0".as_ptr() as *const _, function);
+            bind_function(ctx, module, "new", Some(new), 2);
+            bind_function(ctx, module, "drop", Some(drop), 1);
 
             0
         }
@@ -51,6 +35,10 @@ impl Extension for CanvasExtension {
 
             module
         }
+    }
+
+    fn is_global(&self) -> bool {
+        true
     }
 }
 

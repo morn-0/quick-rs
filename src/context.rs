@@ -1,5 +1,6 @@
 use crate::{
     error::QuickError,
+    extensions::EXTENSION_MAP,
     runtime::Runtime,
     value::{Exception, JSValueRef},
 };
@@ -7,6 +8,7 @@ use log::error;
 use quickjs_sys as sys;
 use std::ffi::CString;
 
+const FLAGS: i32 = sys::JS_EVAL_TYPE_MODULE as i32;
 const SYS_MOD: &str = r#"import * as std from 'std';import * as os from 'os';globalThis.std = std;globalThis.os = os;"#;
 
 pub struct Context(pub *mut sys::JSContext);
@@ -16,8 +18,11 @@ impl From<&Runtime> for Context {
         let ctx = unsafe {
             let ctx = sys::JS_NewContext(value.0);
 
-            sys::js_std_init_handlers(value.0);
+            sys::JS_AddIntrinsicBigFloat(ctx);
+            sys::JS_AddIntrinsicBigDecimal(ctx);
+            sys::JS_AddIntrinsicOperators(ctx);
             sys::JS_EnableBignumExt(ctx, 1);
+
             sys::js_init_module_std(ctx, "std\0".as_ptr() as *const _);
             sys::js_init_module_os(ctx, "os\0".as_ptr() as *const _);
 
@@ -25,9 +30,17 @@ impl From<&Runtime> for Context {
         };
         let ctx = Context(ctx);
 
-        const FLAGS: i32 = sys::JS_EVAL_TYPE_MODULE as i32;
         if let Err(e) = ctx.eval(SYS_MOD, "SYS_MOD", FLAGS) {
             error!("{e}");
+        }
+
+        for extension in EXTENSION_MAP.values() {
+            let name = extension.name();
+            let import = format!("import * as {name} from '{name}';globalThis.{name} = {name};");
+
+            if let Err(e) = ctx.eval(&import, &format!("{name}_mod"), FLAGS) {
+                error!("{e}");
+            }
         }
 
         ctx

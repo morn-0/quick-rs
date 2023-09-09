@@ -1,8 +1,11 @@
 use crate::{
-    extensions::{AsExtension, Extension},
+    extensions::{bind_function, AsExtension, Extension},
     value::{self, JSValueRef, JS_MKVAL_real},
 };
-use barcoders::{generators::image::Image as BarImage, sym::code128::Code128};
+use barcoders::{
+    generators::image::{Color as BarColor, Image as BarImage, Rotation},
+    sym::code128::Code128,
+};
 use fast_qr::{
     convert::{image::ImageBuilder, Builder, Shape},
     QRBuilder, ECL,
@@ -31,33 +34,9 @@ impl Extension for PrintExtension {
             ctx: *mut sys::JSContext,
             module: *mut sys::JSModuleDef,
         ) -> c_int {
-            let function = sys::JS_NewCFunction2(
-                ctx,
-                Some(image),
-                "image\0".as_ptr() as *const _,
-                3,
-                sys::JSCFunctionEnum_JS_CFUNC_generic,
-                sys::JSCFunctionEnum_JS_CFUNC_generic_magic as i32,
-            );
-            sys::JS_SetModuleExport(ctx, module, "image\0".as_ptr() as *const _, function);
-            let function = sys::JS_NewCFunction2(
-                ctx,
-                Some(qrcode),
-                "qrcode\0".as_ptr() as *const _,
-                3,
-                sys::JSCFunctionEnum_JS_CFUNC_generic,
-                sys::JSCFunctionEnum_JS_CFUNC_generic_magic as i32,
-            );
-            sys::JS_SetModuleExport(ctx, module, "qrcode\0".as_ptr() as *const _, function);
-            let function = sys::JS_NewCFunction2(
-                ctx,
-                Some(barcode),
-                "barcode\0".as_ptr() as *const _,
-                3,
-                sys::JSCFunctionEnum_JS_CFUNC_generic,
-                sys::JSCFunctionEnum_JS_CFUNC_generic_magic as i32,
-            );
-            sys::JS_SetModuleExport(ctx, module, "barcode\0".as_ptr() as *const _, function);
+            bind_function(ctx, module, "image", Some(image), 3);
+            bind_function(ctx, module, "qrcode", Some(qrcode), 3);
+            bind_function(ctx, module, "barcode", Some(barcode), 3);
 
             0
         }
@@ -71,6 +50,10 @@ impl Extension for PrintExtension {
 
             module
         }
+    }
+
+    fn is_global(&self) -> bool {
+        true
     }
 }
 
@@ -246,12 +229,31 @@ unsafe extern "C" fn barcode(
             return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
         }
     };
+    let xdim = if args.len() >= 4 {
+        match ManuallyDrop::new(JSValueRef::from_js_value(ctx, args[3])).to_i32() {
+            Ok(xdim) => xdim as u32,
+            Err(e) => {
+                error!("{e}");
+                1
+            }
+        }
+    } else {
+        1
+    };
 
     if let Ok(barcode) = Code128::new(format!("Ɓ{data}")) {
         let encoded = barcode.encode();
         let height = height as u32;
 
-        if let Ok(image_buf) = BarImage::png(height).generate(encoded) {
+        let image = BarImage::JPEG {
+            height,
+            xdim,
+            rotation: Rotation::Zero,
+            foreground: BarColor::black(),
+            background: BarColor::white(),
+        };
+
+        if let Ok(image_buf) = image.generate(encoded) {
             if let Ok(image) = image::load_from_memory(&image_buf) {
                 let data = print_image(image, None, false, mode);
 
@@ -316,25 +318,12 @@ fn print_image(
     let len = (width + 7) / 8;
     let mut buf: Vec<u8> = vec![0; (len * height) as usize];
 
-    if mode == 1 {
-        for y in 0..height {
-            for x in 0..len {
-                for b in 0..8 {
-                    let i = x * 8 + b;
-                    if i < width && !is_blank_pixel(&image, i, y) {
-                        buf[(y * len + x) as usize] += 0x80 >> (b & 0x7);
-                    }
-                }
-            }
-        }
-    } else if mode == 2 {
-        for y in 0..height {
-            for x in 0..len {
-                for b in 0..8 {
-                    let i = x * 8 + b;
-                    if i < width && is_blank_pixel(&image, i, y) {
-                        buf[(y * len + x) as usize] += 0x80 >> (b & 0x7);
-                    }
+    for y in 0..height {
+        for x in 0..len {
+            for b in 0..8 {
+                let i = x * 8 + b;
+                if i < width && is_blank_pixel(&image, i, y, mode) {
+                    buf[(y * len + x) as usize] += 0x80 >> (b & 0x7);
                 }
             }
         }
@@ -387,7 +376,13 @@ fn auto_threshold(image: ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>
     }
 }
 
-fn is_blank_pixel(image: &DynamicImage, x: u32, y: u32) -> bool {
+fn is_blank_pixel(image: &DynamicImage, x: u32, y: u32, mode: i32) -> bool {
     let pixel = image.get_pixel(x, y);
-    pixel[3] == 0 || (pixel[0] & pixel[1] & pixel[2]) == 0xFF
+    let is_blank = pixel[3] == 0 || (pixel[0] & pixel[1] & pixel[2]) == 0xFF;
+
+    if mode == 1 {
+        !is_blank
+    } else {
+        is_blank
+    }
 }

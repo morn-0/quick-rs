@@ -6,6 +6,8 @@ pub enum QuickError {
     CodeError(String),
     #[error("EvalError {0}")]
     EvalError(String),
+    #[error("CallError {0}")]
+    CallError(String),
     #[error("CStringError {0}")]
     CStringError(String),
     #[error("UnsupportedTypeError {0}")]

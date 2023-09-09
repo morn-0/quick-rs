@@ -65,6 +65,7 @@ impl Runtime {
         let rt = unsafe {
             let rt = sys::JS_NewRuntime();
 
+            sys::js_std_init_handlers(rt);
             #[cfg(target_pointer_width = "32")]
             let heap_size = 1024 * 1024 * 16;
             #[cfg(target_pointer_width = "64")]

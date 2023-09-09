@@ -37,11 +37,11 @@ impl Function {
         };
 
         let value = JSValueRef::from_js_value(self.value.ctx, value);
-        if value.tag() == sys::JS_TAG_EXCEPTION {
+        if value.is_exception() {
             let value = unsafe { sys::JS_GetException(self.value.ctx) };
             let value = JSValueRef::from_js_value(self.value.ctx, value);
 
-            Err(QuickError::EvalError(Exception(value).to_string()))
+            Err(QuickError::CallError(Exception(value).to_string()))
         } else {
             Ok(value)
         }
