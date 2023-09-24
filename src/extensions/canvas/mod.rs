@@ -1,12 +1,13 @@
 use crate::{
     context::Context,
-    extensions::{bind_function, AsExtension, Extension},
+    extensions::{bind_function, canvas::r#impl::Canvas, AsExtension, Extension},
     value::{self, JSValueRef},
 };
 use log::error;
-use plotters::prelude::BitMapBackend;
 use quickjs_sys as sys;
 use std::{ffi::c_int, mem::ManuallyDrop, slice};
+
+pub(crate) mod r#impl;
 
 pub(crate) struct CanvasExtension;
 
@@ -74,10 +75,9 @@ unsafe extern "C" fn new(
         }
     };
 
-    let mut buffer = vec![0; 3 * (width * height) as usize];
-    let bit_map = BitMapBackend::with_buffer(&mut buffer, (width as u32, height as u32));
+    let canvas = Canvas::new(width as u32, height as u32);
 
-    let ptr = (Box::into_raw(Box::new(bit_map)) as u64).to_string();
+    let ptr = (Box::into_raw(Box::new(canvas)) as u64).to_string();
     if let Ok(ptr) = ManuallyDrop::new(Context(ctx)).new_string(&ptr) {
         return ptr.val;
     }
@@ -104,8 +104,8 @@ unsafe extern "C" fn drop(
         }
     };
     if let Ok(ptr) = ptr.parse::<u64>() {
-        let bit_map = Box::from_raw(ptr as *mut BitMapBackend);
-        core::mem::drop(bit_map);
+        let canvas = Box::from_raw(ptr as *mut Canvas);
+        std::mem::drop(canvas);
     }
 
     value::JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0)

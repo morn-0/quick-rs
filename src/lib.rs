@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 pub mod context;
 pub mod error;
 pub(crate) mod extensions;
@@ -14,6 +16,7 @@ fn test() {
 
     let now = std::time::Instant::now();
     for _ in 0..1000 {
+        let i = Box::new(1);
         let _value = context
             .eval_global(
                 r#"var data = JSON.stringify(print.barcode("1234567890", 100, 1));data;"#,
