@@ -1,6 +1,5 @@
 use crate::{
-    context::Context,
-    extensions::{bind_function, canvas::r#impl::Canvas, AsExtension, Extension},
+    extensions::{bind_function, AsExtension, Extension},
     value::{self, JSValueRef},
 };
 use log::error;
@@ -21,8 +20,7 @@ impl Extension for CanvasExtension {
             ctx: *mut sys::JSContext,
             module: *mut sys::JSModuleDef,
         ) -> c_int {
-            bind_function(ctx, module, "new", Some(new), 2);
-            bind_function(ctx, module, "drop", Some(drop), 1);
+            bind_function(ctx, module, "invoke", Some(invoke), 1);
 
             0
         }
@@ -30,9 +28,7 @@ impl Extension for CanvasExtension {
         unsafe {
             let module = sys::JS_NewCModule(ctx, "_canvas\0".as_ptr() as *const _, Some(func));
 
-            sys::JS_AddModuleExport(ctx, module, "new\0".as_ptr() as *const _);
             sys::JS_AddModuleExport(ctx, module, "invoke\0".as_ptr() as *const _);
-            sys::JS_AddModuleExport(ctx, module, "drop\0".as_ptr() as *const _);
 
             module
         }
@@ -49,64 +45,24 @@ impl AsExtension for CanvasExtension {
     }
 }
 
-unsafe extern "C" fn new(
-    ctx: *mut sys::JSContext,
-    _: sys::JSValue,
-    argc: c_int,
-    argv: *mut sys::JSValue,
-) -> sys::JSValue {
-    if argc != 2 {
-        return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
-    }
-    let args = slice::from_raw_parts(argv, argc as usize);
-
-    let width = match ManuallyDrop::new(JSValueRef::from_js_value(ctx, args[0])).to_i32() {
-        Ok(width) => width,
-        Err(e) => {
-            error!("{e}");
-            return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
-        }
-    };
-    let height = match ManuallyDrop::new(JSValueRef::from_js_value(ctx, args[1])).to_i32() {
-        Ok(height) => height,
-        Err(e) => {
-            error!("{e}");
-            return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
-        }
-    };
-
-    let canvas = Canvas::new(width as u32, height as u32);
-
-    let ptr = (Box::into_raw(Box::new(canvas)) as u64).to_string();
-    if let Ok(ptr) = ManuallyDrop::new(Context(ctx)).new_string(&ptr) {
-        return ptr.val;
-    }
-
-    value::JS_MKVAL_real(sys::JS_TAG_NULL, 0)
-}
-
-unsafe extern "C" fn drop(
+unsafe extern "C" fn invoke(
     ctx: *mut sys::JSContext,
     _: sys::JSValue,
     argc: c_int,
     argv: *mut sys::JSValue,
 ) -> sys::JSValue {
     if argc != 1 {
-        return value::JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0);
+        return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
     }
     let args = slice::from_raw_parts(argv, argc as usize);
 
-    let ptr = match ManuallyDrop::new(JSValueRef::from_js_value(ctx, args[0])).to_string() {
-        Ok(ptr) => ptr,
+    let obj = match ManuallyDrop::new(JSValueRef::from_js_value(ctx, args[0])).to_i32() {
+        Ok(width) => width,
         Err(e) => {
             error!("{e}");
             return value::JS_MKVAL_real(sys::JS_TAG_NULL, 0);
         }
     };
-    if let Ok(ptr) = ptr.parse::<u64>() {
-        let canvas = Box::from_raw(ptr as *mut Canvas);
-        std::mem::drop(canvas);
-    }
 
-    value::JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0)
+    value::JS_MKVAL_real(sys::JS_TAG_NULL, 0)
 }

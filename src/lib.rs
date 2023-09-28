@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 pub mod context;
 pub mod error;
 pub(crate) mod extensions;
@@ -15,7 +13,7 @@ fn test() {
     let context = context::Context::from(&runtime);
 
     let now = std::time::Instant::now();
-    for _ in 0..1000 {
+    for _ in 0..1 {
         let i = Box::new(1);
         let _value = context
             .eval_global(

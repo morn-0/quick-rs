@@ -96,6 +96,12 @@ impl Runtime {
     }
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Drop for Runtime {
     fn drop(&mut self) {
         unsafe {

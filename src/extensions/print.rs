@@ -72,7 +72,7 @@ unsafe extern "C" fn image(
     argc: c_int,
     argv: *mut sys::JSValue,
 ) -> sys::JSValue {
-    static HTTP: Lazy<Client> = Lazy::new(|| Client::new());
+    static HTTP: Lazy<Client> = Lazy::new(Client::new);
 
     let args = slice::from_raw_parts(argv, argc as usize);
 
@@ -284,7 +284,7 @@ fn print_image(
 ) -> Vec<u8> {
     if let Some(pixel) = image.as_mut_rgba8() {
         pixel.enumerate_pixels_mut().for_each(|(_, _, rgba)| {
-            const RATE: f32 = 1.003921569;
+            const RATE: f32 = 1.003_921_569;
             let (r, g, b, a) = (
                 rgba.0[0] as i32,
                 rgba.0[1] as i32,
