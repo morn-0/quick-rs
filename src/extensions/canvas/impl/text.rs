@@ -130,7 +130,7 @@ impl Paint for Text {
             }
         }
 
-        let mut rgba_bitmap: Vec<u8> = vec![];
+        let mut rgba_bitmap: Vec<u8> = Vec::with_capacity(bitmap.len() * 4);
         for i in &bitmap {
             rgba_bitmap.extend([0, 0, 0, *i].iter());
         }
