@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, sync::RwLock};
 use tiny_skia::{PixmapPaint, PixmapRef, Transform};
 
-static FONT_CACHE: Lazy<RwLock<HashMap<CompactString, Font>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+#[rustfmt::skip]
+static FONT_CACHE: Lazy<RwLock<HashMap<CompactString, Font>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct Text {
