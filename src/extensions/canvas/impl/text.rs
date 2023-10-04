@@ -102,13 +102,13 @@ impl Paint for Text {
 
         let dim = compute_dim(&layout);
 
-        let mut glyphs: Vec<Vec<u8>> = Vec::with_capacity(self.content.len());
+        let mut glyphs = Vec::with_capacity(self.content.len());
         self.content.chars().for_each(|c| {
             let (_, bitmap) = font.rasterize(c, style.size);
             glyphs.push(bitmap);
         });
 
-        let mut bitmap: Vec<u8> = vec![0; dim.0 * dim.1];
+        let mut bitmap = vec![0; dim.0 * dim.1];
         for (pos, char) in std::iter::zip(layout.glyphs(), &glyphs) {
             let GlyphPosition {
                 x,
@@ -138,7 +138,7 @@ impl Paint for Text {
             }
         }
 
-        let mut rgba_bitmap: Vec<u8> = Vec::with_capacity(bitmap.len() * 4);
+        let mut rgba_bitmap = Vec::with_capacity(bitmap.len() * 4);
         for i in &bitmap {
             rgba_bitmap.extend([0, 0, 0, *i].iter());
         }
