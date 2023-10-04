@@ -16,18 +16,25 @@ reqwest = { version = "0.11", features = [
     "rustls-tls-webpki-roots",
 ], default-features = false }
 once_cell = { version = "1", features = ["std"], default-features = false }
-image = { version = "0.24", features = ["ico"], default-features = false }
+image = { version = "0.24", features = [
+    "ico",
+    "jpeg",
+], default-features = false }
 imageproc = { version = "0.23", default-features = false }
 image_hasher = { version = "1", default-features = false }
 fast_qr = { version = "0.10", features = ["image"], default-features = false }
 barcoders = { version = "1", features = ["image"], default-features = false }
 fontdue = { version = "0.7", features = [
     "simd",
-    "parallel"
+    "parallel",
 ], default-features = false }
 tiny-skia = { version = "0.11", features = [
     "std",
     "png-format",
-    "simd"
+    "simd",
 ], default-features = false }
-
+serde = { version = "1", features = ["derive"], default-features = false }
+serde_json = { version = "1", features = ["alloc"], default-features = false }
+compact_str = { version = "0.7", features = [
+    "serde",
+], default-features = false }

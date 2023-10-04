@@ -1,22 +1,26 @@
 use crate::extensions::canvas::r#impl::{Canvas, Paint};
+use compact_str::{CompactString, ToCompactString};
 use fontdue::{
     layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings},
     Font, FontSettings,
 };
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, sync::RwLock};
 use tiny_skia::{PixmapPaint, PixmapRef, Transform};
 
-static FONT_CACHE: Lazy<RwLock<HashMap<String, Font>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static FONT_CACHE: Lazy<RwLock<HashMap<CompactString, Font>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
+#[derive(Deserialize, Serialize)]
 pub(crate) struct Text {
-    content: String,
+    content: CompactString,
 }
 
 impl Text {
-    pub fn new(content: impl AsRef<str> + ToString) -> Self {
+    pub fn new(content: impl AsRef<str> + ToCompactString) -> Self {
         Self {
-            content: content.to_string(),
+            content: content.to_compact_string(),
         }
     }
 }
@@ -55,7 +59,7 @@ impl Paint for Text {
                 }
             };
 
-            let bytes = match fs::read(&style.font) {
+            let bytes = match fs::read(style.font.as_str()) {
                 Ok(b) => b,
                 Err(e) => {
                     eprintln!("{e}");
@@ -113,12 +117,16 @@ impl Paint for Text {
                 height,
                 ..
             } = pos;
+
             let x = *x as usize;
             let y = *y as usize;
 
+            let width = x + width;
+            let height = y + height;
+
             let mut i = 0;
-            for y in y..y + height {
-                for x in x..x + width {
+            for y in y..height {
+                for x in x..width {
                     let index = y * dim.0 + x;
 
                     if index < bitmap.len() {
@@ -148,16 +156,16 @@ impl Paint for Text {
     }
 }
 
-#[derive(Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub(crate) struct TextStyle {
-    font: String,
+    font: CompactString,
     size: f32,
 }
 
 impl TextStyle {
-    pub fn new(font: impl AsRef<str> + ToString, size: f32) -> Self {
+    pub fn new(font: impl AsRef<str> + ToCompactString, size: f32) -> Self {
         Self {
-            font: font.to_string(),
+            font: font.to_compact_string(),
             size,
         }
     }
