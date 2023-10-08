@@ -5,12 +5,26 @@ pub(crate) mod barcode;
 pub(crate) mod qrcode;
 pub(crate) mod text;
 
+#[derive(Clone, Copy)]
+pub(crate) struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Into<Point> for (i32, i32) {
+    fn into(self) -> Point {
+        Point {
+            x: self.0,
+            y: self.1,
+        }
+    }
+}
+
 pub(crate) trait Paint {
     type Target;
     type Style;
-    type Point;
 
-    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Self::Point);
+    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Point);
 }
 
 pub(crate) struct Canvas {
@@ -35,7 +49,7 @@ impl Canvas {
         })
     }
 
-    pub(crate) fn png(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub(crate) fn to_png_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         Ok(self.pixmap.encode_png()?)
     }
 }
@@ -52,17 +66,29 @@ fn test() {
     let now = Instant::now();
     let mut canvas = Canvas::new(1920, 1080).unwrap();
 
-    let text_style = TextStyle::new("LXGWWenKai-Bold.ttf", 42.0);
-    let qr_style = QrStyle::new(2, 300);
+    let text_style = TextStyle::new("LXGWWenKai-Regular.ttf", 42.0);
+    let qr_style = QrStyle::new(0, 300);
     let bar_style = BarStyle::new(120, 4);
 
-    Text::new("遥想公瑾当年，小乔初嫁了，雄姿英发。").draw(&mut canvas, text_style.clone(), (0, 0));
-    Text::new("羽扇纶巾，谈笑间、樯橹灰飞烟灭。").draw(&mut canvas, text_style.clone(), (0, 50));
-    Text::new("故国神游，多情应笑我，早生华发。").draw(&mut canvas, text_style.clone(), (0, 100));
-    Text::new("人间如梦，一尊还酹江月。").draw(&mut canvas, text_style.clone(), (0, 150));
-    Qrcode::new("人间如梦，一尊还酹江月。").draw(&mut canvas, qr_style, (0, 250));
-    Barcode::new("1234567890").draw(&mut canvas, bar_style, (0, 600));
+    Text::new("遥想公瑾当年，小乔初嫁了，雄姿英发。").draw(
+        &mut canvas,
+        text_style.clone(),
+        (0, 0).into(),
+    );
+    Text::new("羽扇纶巾，谈笑间、樯橹灰飞烟灭。").draw(
+        &mut canvas,
+        text_style.clone(),
+        (0, 50).into(),
+    );
+    Text::new("故国神游，多情应笑我，早生华发。").draw(
+        &mut canvas,
+        text_style.clone(),
+        (0, 100).into(),
+    );
+    Text::new("人间如梦，一尊还酹江月。").draw(&mut canvas, text_style.clone(), (0, 150).into());
+    Qrcode::new("人间如梦，一尊还酹江月。").draw(&mut canvas, qr_style, (0, 250).into());
+    Barcode::new("1234567890").draw(&mut canvas, bar_style, (0, 600).into());
 
-    fs::write("test.png", canvas.png().unwrap()).unwrap();
+    fs::write("test.png", canvas.to_png_bytes().unwrap()).unwrap();
     println!("usage {}", now.elapsed().as_millis());
 }

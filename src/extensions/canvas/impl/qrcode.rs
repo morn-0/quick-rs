@@ -1,4 +1,4 @@
-use crate::extensions::canvas::r#impl::{Canvas, Paint};
+use crate::extensions::canvas::r#impl::{Canvas, Paint, Point};
 use compact_str::{CompactString, ToCompactString};
 use fast_qr::{
     convert::{image::ImageBuilder, Builder, Shape},
@@ -25,9 +25,7 @@ impl Paint for Qrcode {
 
     type Style = QrStyle;
 
-    type Point = (i32, i32);
-
-    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Self::Point) {
+    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Point) {
         if let Ok(qrcode) = QRBuilder::new(self.content.as_str())
             .mask(Mask::HorizontalLines)
             .ecl(ECL::M)
@@ -43,8 +41,8 @@ impl Paint for Qrcode {
             let pixmap = PixmapRef::from_bytes(pixmap.data(), pixmap.width(), pixmap.height());
             if let Some(pixmap) = pixmap {
                 target.pixmap.draw_pixmap(
-                    point.0,
-                    point.1,
+                    point.x,
+                    point.y,
                     pixmap,
                     &PixmapPaint::default(),
                     Transform::default(),

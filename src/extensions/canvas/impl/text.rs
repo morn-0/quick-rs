@@ -1,4 +1,4 @@
-use crate::extensions::canvas::r#impl::{Canvas, Paint};
+use crate::extensions::canvas::r#impl::{Canvas, Paint, Point};
 use compact_str::{CompactString, ToCompactString};
 use fontdue::{
     layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings},
@@ -30,9 +30,7 @@ impl Paint for Text {
 
     type Style = TextStyle;
 
-    type Point = (i32, i32);
-
-    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Self::Point) {
+    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Point) {
         fn compute_dim(layout: &Layout) -> (usize, usize) {
             let (mut x1, mut y1, mut x2, mut y2): (i32, i32, i32, i32) = (0, 0, 0, 0);
 
@@ -145,8 +143,8 @@ impl Paint for Text {
 
         if let Some(text) = PixmapRef::from_bytes(&rgba_bitmap, dim.0 as u32, dim.1 as u32) {
             target.pixmap.draw_pixmap(
-                point.0,
-                point.1,
+                point.x,
+                point.y,
                 text,
                 &PixmapPaint::default(),
                 Transform::default(),

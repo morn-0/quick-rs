@@ -1,4 +1,4 @@
-use crate::extensions::canvas::r#impl::{Canvas, Paint};
+use crate::extensions::canvas::r#impl::{Canvas, Paint, Point};
 use barcoders::{
     generators::image::{Color, Image, Rotation},
     sym::code128::Code128,
@@ -27,9 +27,7 @@ impl Paint for Barcode {
 
     type Style = BarStyle;
 
-    type Point = (i32, i32);
-
-    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Self::Point) {
+    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Point) {
         if let Ok(barcode) = Code128::new(format!("Ɓ{}", self.content)) {
             let encoded = barcode.encode();
 
@@ -52,8 +50,8 @@ impl Paint for Barcode {
                     let pixmap = PixmapRef::from_bytes(data, width, height);
                     if let Some(pixmap) = pixmap {
                         target.pixmap.draw_pixmap(
-                            point.0,
-                            point.1,
+                            point.x,
+                            point.y,
                             pixmap,
                             &PixmapPaint::default(),
                             Transform::default(),
