@@ -1,6 +1,6 @@
 use crate::{error::QuickError, util};
 use quickjs_sys as sys;
-use std::ffi::c_void;
+use std::{ffi::c_void, mem::ManuallyDrop};
 
 extern "C" {
     pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
@@ -64,6 +64,11 @@ impl JSValueRef {
     pub fn ptr(&self) -> *mut c_void {
         self.ptr
     }
+
+    #[inline(always)]
+    pub fn val(self) -> sys::JSValue {
+        ManuallyDrop::new(self).val
+    }
 }
 
 impl Clone for JSValueRef {
@@ -100,4 +105,16 @@ impl ToString for Exception {
 
         format!("{name} {message} {stack}")
     }
+}
+
+pub fn make_undefined() -> sys::JSValue {
+    unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) }
+}
+
+pub fn make_null() -> sys::JSValue {
+    unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) }
+}
+
+pub fn make_int(value: i32) -> sys::JSValue {
+    unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) }
 }

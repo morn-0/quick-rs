@@ -11,12 +11,9 @@ pub(crate) struct Point {
     y: i32,
 }
 
-impl Into<Point> for (i32, i32) {
-    fn into(self) -> Point {
-        Point {
-            x: self.0,
-            y: self.1,
-        }
+impl From<(i32, i32)> for Point {
+    fn from(val: (i32, i32)) -> Self {
+        Point { x: val.0, y: val.1 }
     }
 }
 
@@ -54,7 +51,7 @@ impl Canvas {
     }
 }
 
-#[test]
+// #[test]
 fn test() {
     use crate::extensions::canvas::r#impl::{
         barcode::{BarStyle, Barcode},

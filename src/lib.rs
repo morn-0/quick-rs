@@ -13,16 +13,52 @@ fn test() {
     let context = context::Context::from(&runtime);
 
     let now = std::time::Instant::now();
+
     for _ in 0..1 {
-        let i = Box::new(1);
-        let _value = context
+        let value = context
             .eval_global(
-                r#"var data = JSON.stringify(print.barcode("1234567890", 100, 1));data;"#,
+                r#"
+                var canvas = _canvas.invoke(JSON.stringify({
+                    "call": 0,
+                    "style": {
+                        "width": 1920,
+                        "height": 1080
+                    }
+                }));
+
+                _canvas.invoke(JSON.stringify({
+                    "call": 2,
+                    "target": canvas,
+                    "paint": {
+                        "content": "一点浩然气，千里快哉风。"
+                    },
+                    "style": {
+                        "font": "/home/arch/quick-rs/LXGWWenKai-Regular.ttf",
+                        "size": 32
+                    },
+                    "point": [15, 15]
+                }));
+
+                _canvas.invoke(JSON.stringify({
+                    "call": 1,
+                    "target": canvas,
+                    "paint": {
+                        "path": "test.png"
+                    }
+                }));
+
+                _canvas.invoke(JSON.stringify({
+                    "call": -1,
+                    "target": canvas
+                }));
+
+                canvas;
+                "#,
                 "test",
             )
             .unwrap();
-        // println!("{}", value.tag());
-        // println!("{:?}", value.to_string());
+        println!("{:?}", value.to_string());
     }
+
     println!("{}", now.elapsed().as_millis());
 }
