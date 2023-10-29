@@ -18,25 +18,42 @@ fn test() {
         let value = context
             .eval_global(
                 r#"
+                let width = 3840;
+                let height = 2160;
+
+                let content = "A time will come for me to ride the wind and cleace the waves, i'll set my cloud white sail and cross the sea which waves.";
+                let font = "/home/arch/quick-rs/learning_curve_regular_ot_tt.ttf";
+                let size = 92;
+
                 var canvas = _canvas.invoke(JSON.stringify({
                     "call": 0,
                     "style": {
-                        "width": 1920,
-                        "height": 1080
+                        "width": width,
+                        "height": height
                     }
                 }));
 
+                let text_width = _canvas.invoke(JSON.stringify({
+                    "call": 3,
+                    "paint": {
+                        "content": content
+                    },
+                    "style": {
+                        "font": font,
+                        "size": size
+                    }
+                }));
                 _canvas.invoke(JSON.stringify({
                     "call": 2,
                     "target": canvas,
                     "paint": {
-                        "content": "一点浩然气，千里快哉风。"
+                        "content": content
                     },
                     "style": {
-                        "font": "/home/arch/quick-rs/LXGWWenKai-Regular.ttf",
-                        "size": 32
+                        "font": font,
+                        "size": size
                     },
-                    "point": [15, 15]
+                    "point": [(width - text_width) / 2, (height - size) / 2]
                 }));
 
                 _canvas.invoke(JSON.stringify({
@@ -57,6 +74,7 @@ fn test() {
                 "test",
             )
             .unwrap();
+
         println!("{:?}", value.to_string());
     }
 

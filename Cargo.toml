@@ -38,3 +38,4 @@ serde_json = { version = "1", features = ["alloc"], default-features = false }
 compact_str = { version = "0.7", features = [
     "serde",
 ], default-features = false }
+rustc-hash = { version = "1", features = ["std"], default-features = false }

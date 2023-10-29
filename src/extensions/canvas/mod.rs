@@ -50,7 +50,7 @@ impl AsExtension for CanvasExtension {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Invoke {
     call: i32,
     #[serde(default)]

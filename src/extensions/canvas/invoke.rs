@@ -64,9 +64,16 @@ pub unsafe fn invoke(
 
             let mut paint = serde_json::from_value::<Text>(invoke.paint)?;
             let style = serde_json::from_value::<TextStyle>(invoke.style)?;
-            let point = serde_json::from_value::<(i32, i32)>(invoke.point)?;
+            let point = serde_json::from_value::<(f32, f32)>(invoke.point)?;
 
-            paint.draw(&mut canvas, style, point.into());
+            paint.draw(&mut canvas, style, point);
+        }
+        3 => {
+            let paint = serde_json::from_value::<Text>(invoke.paint)?;
+            let style = serde_json::from_value::<TextStyle>(invoke.style)?;
+
+            let width = paint.measure(style);
+            return Ok(value::make_int(width));
         }
         _ => {}
     }
