@@ -24,10 +24,6 @@ imageproc = { version = "0.23", default-features = false }
 image_hasher = { version = "1", default-features = false }
 fast_qr = { version = "0.10", features = ["image"], default-features = false }
 barcoders = { version = "1", features = ["image"], default-features = false }
-fontdue = { version = "0.7", features = [
-    "simd",
-    "parallel",
-], default-features = false }
 tiny-skia = { version = "0.11", features = [
     "std",
     "png-format",
@@ -39,3 +35,6 @@ compact_str = { version = "0.7", features = [
     "serde",
 ], default-features = false }
 rustc-hash = { version = "1", features = ["std"], default-features = false }
+parking_lot = { version = "0.12", default-features = false }
+ab_glyph = { version = "0.2", features = ["std"], default-features = false }
+swash = { version = "0.1", default-features = false }

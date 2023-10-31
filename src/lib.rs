@@ -23,7 +23,7 @@ fn test() {
 
                 let content = "A time will come for me to ride the wind and cleace the waves, i'll set my cloud white sail and cross the sea which waves.";
                 let font = "/home/arch/quick-rs/learning_curve_regular_ot_tt.ttf";
-                let size = 92;
+                let size = 96;
 
                 var canvas = _canvas.invoke(JSON.stringify({
                     "call": 0,
@@ -33,28 +33,30 @@ fn test() {
                     }
                 }));
 
-                let text_width = _canvas.invoke(JSON.stringify({
-                    "call": 3,
-                    "paint": {
-                        "content": content
-                    },
-                    "style": {
-                        "font": font,
-                        "size": size
-                    }
-                }));
-                _canvas.invoke(JSON.stringify({
-                    "call": 2,
-                    "target": canvas,
-                    "paint": {
-                        "content": content
-                    },
-                    "style": {
-                        "font": font,
-                        "size": size
-                    },
-                    "point": [(width - text_width) / 2, (height - size) / 2]
-                }));
+                for (let i = 0; i < 1000; i++) {
+                    let text_width = _canvas.invoke(JSON.stringify({
+                        "call": 3,
+                        "paint": {
+                            "content": content
+                        },
+                        "style": {
+                            "font": font,
+                            "size": size
+                        }
+                    }));
+                    _canvas.invoke(JSON.stringify({
+                        "call": 2,
+                        "target": canvas,
+                        "paint": {
+                            "content": content
+                        },
+                        "style": {
+                            "font": font,
+                            "size": size
+                        },
+                        "point": [(width - text_width) / 2, (height - size) / 2]
+                    }));
+                }
 
                 _canvas.invoke(JSON.stringify({
                     "call": 1,
