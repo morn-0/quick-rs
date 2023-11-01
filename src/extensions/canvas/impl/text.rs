@@ -16,10 +16,10 @@ use swash::{
 static FONT_BUF: Lazy<RwLock<FxHashMap<CompactString, &'static [u8]>>> = Lazy::new(|| RwLock::new(FxHashMap::default()));
 
 #[rustfmt::skip]
-static FONT_ARC: Lazy<RwLock<FxHashMap<CompactString, FontArc>>> = Lazy::new(|| RwLock::new(FxHashMap::default()));
+static FONT_REF: Lazy<RwLock<FxHashMap<CompactString, FontRef>>> = Lazy::new(|| RwLock::new(FxHashMap::default()));
 
 #[rustfmt::skip]
-static FONT_REF: Lazy<RwLock<FxHashMap<CompactString, FontRef>>> = Lazy::new(|| RwLock::new(FxHashMap::default()));
+static FONT_ARC: Lazy<RwLock<FxHashMap<CompactString, FontArc>>> = Lazy::new(|| RwLock::new(FxHashMap::default()));
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct Text {
@@ -39,7 +39,7 @@ impl Paint for Text {
     type Style = TextStyle;
     type Point = (f32, f32);
 
-    fn draw(&mut self, target: &mut Self::Target, style: Self::Style, point: Self::Point) {
+    fn draw(&mut self, target: &mut Self::Target, mut style: Self::Style, point: Self::Point) {
         init_font(&style.font);
 
         let font_ref = FONT_REF.read();
@@ -66,6 +66,10 @@ impl Paint for Text {
             }
         };
 
+        if let Some(unit) = font_arc.units_per_em() {
+            style.size = style.size * font_arc.height_unscaled() / unit;
+        }
+
         let scaled_font = Font::as_scaled(&font_arc, style.size);
 
         let (mut base_x, mut base_y) = (point.0, point.1);
@@ -78,29 +82,28 @@ impl Paint for Text {
         shaper.add_str(&self.content);
         shaper.shape_with(|c| {
             for glyph in c.glyphs {
-                let outlined_glyph = scaled_font.outline_glyph(Glyph {
+                let outlined = scaled_font.outline_glyph(Glyph {
                     id: GlyphId(glyph.id),
                     scale,
                     position: ab_point(base_x, base_y),
                 });
 
-                if let Some(outlined_glyph) = outlined_glyph {
-                    let px_bounds = outlined_glyph.px_bounds();
+                if let Some(outlined) = outlined {
+                    let bounds = outlined.px_bounds();
 
-                    outlined_glyph.draw(|x, y, c| {
-                        let x = (x as f32 + px_bounds.min.x) as u32;
-                        let y = (y as f32 + px_bounds.min.y) as u32;
+                    outlined.draw(|x, y, c| {
+                        let x = (x as f32 + bounds.min.x) as u32;
+                        let y = (y as f32 + bounds.min.y) as u32;
                         let c = (255.0 * (1.0 - c)) as u8;
 
                         let index = ((x + y * target.width) * 4) as usize;
-                        if index < data.len() {
+                        if index + 2 < data.len() {
                             unsafe {
                                 let ptr = data_ptr.add(index);
 
                                 *ptr = c;
                                 *ptr.add(1) = c;
                                 *ptr.add(2) = c;
-                                *ptr.add(3) = 255;
                             }
                         }
                     });
@@ -145,19 +148,19 @@ impl Text {
 fn init_font(font: &str) {
     if !FONT_BUF.read().contains_key(font) {
         let mut font_buf = FONT_BUF.write();
-        let mut font_arc = FONT_ARC.write();
         let mut font_ref = FONT_REF.write();
+        let mut font_arc = FONT_ARC.write();
 
         match fs::read(font) {
             Ok(b) => {
                 let b = Box::leak(b.into_boxed_slice());
-                let arc = FontArc::try_from_slice(b);
                 let r#ref = FontRef::from_index(b, 0);
+                let arc = FontArc::try_from_slice(b);
 
                 match (arc, r#ref) {
                     (Ok(a), Some(f)) => {
-                        font_arc.insert(font.to_compact_string(), a);
                         font_ref.insert(font.to_compact_string(), f);
+                        font_arc.insert(font.to_compact_string(), a);
                         font_buf.insert(font.to_compact_string(), b);
                     }
                     (Err(e), _) => {
