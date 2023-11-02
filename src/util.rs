@@ -17,8 +17,9 @@ pub fn to_string(value: JSValueRef) -> String {
     string
 }
 
-pub fn to_property(value: JSValueRef, prop: *const c_char) -> JSValueRef {
-    let js_value = unsafe { sys::JS_GetPropertyStr(value.ctx, value.val, prop) };
+/// # Safety
+pub unsafe fn to_property(value: JSValueRef, prop: *const c_char) -> JSValueRef {
+    let js_value = sys::JS_GetPropertyStr(value.ctx, value.val, prop);
     JSValueRef::from_js_value(value.ctx, js_value)
 }
 

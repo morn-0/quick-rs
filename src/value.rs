@@ -90,18 +90,15 @@ pub struct Exception(pub JSValueRef);
 
 impl ToString for Exception {
     fn to_string(&self) -> String {
-        let name = util::to_string(util::to_property(
-            self.0.clone(),
-            "name\0".as_ptr() as *const _,
-        ));
-        let message = util::to_string(util::to_property(
-            self.0.clone(),
-            "message\0".as_ptr() as *const _,
-        ));
-        let stack = util::to_string(util::to_property(
-            self.0.clone(),
-            "stack\0".as_ptr() as *const _,
-        ));
+        let name = util::to_string(unsafe {
+            util::to_property(self.0.clone(), "name\0".as_ptr() as *const _)
+        });
+        let message = util::to_string(unsafe {
+            util::to_property(self.0.clone(), "message\0".as_ptr() as *const _)
+        });
+        let stack = util::to_string(unsafe {
+            util::to_property(self.0.clone(), "stack\0".as_ptr() as *const _)
+        });
 
         format!("{name} {message} {stack}")
     }

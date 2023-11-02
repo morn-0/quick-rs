@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-bindgen = { version = "0.68", default-features = false }
+bindgen = { version = "0.69", default-features = false }
 cc = { version = "1", default-features = false }
 copy_dir = { version = "0.1", default-features = false }

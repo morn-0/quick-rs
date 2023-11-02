@@ -1,6 +1,5 @@
 use crate::{
     error::QuickError,
-    extensions::EXTENSION_MAP,
     runtime::Runtime,
     value::{Exception, JSValueRef},
 };
@@ -32,15 +31,6 @@ impl From<&Runtime> for Context {
 
         if let Err(e) = ctx.eval(SYS_MOD, "SYS_MOD", FLAGS) {
             error!("{e}");
-        }
-
-        for extension in EXTENSION_MAP.values() {
-            let name = extension.name();
-            let import = format!("import * as {name} from '{name}';globalThis.{name} = {name};");
-
-            if let Err(e) = ctx.eval(&import, &format!("{name}_mod"), FLAGS) {
-                error!("{e}");
-            }
         }
 
         ctx
