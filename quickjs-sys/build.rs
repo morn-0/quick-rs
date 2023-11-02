@@ -7,6 +7,9 @@ use std::{
 const LIB_NAME: &str = "quickjs";
 
 fn main() {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
+
     let embed = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("embed");
     let quickjs = embed.join("quickjs");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -33,10 +36,20 @@ fn main() {
 
     let patch = embed.join("patch");
     for patch in fs::read_dir(patch).unwrap() {
+        let patch = patch.unwrap().path();
+
+        if target_os != "windows"
+            && target_env != "msvc"
+            && (patch.ends_with("basic_msvc_compat.patch")
+                || patch.ends_with("msvc_alloca_compat.patch"))
+        {
+            continue;
+        }
+
         Command::new("patch")
             .current_dir(&code_path)
             .arg("-i")
-            .arg(patch.unwrap().path())
+            .arg(patch)
             .spawn()
             .unwrap()
             .wait()
@@ -44,20 +57,20 @@ fn main() {
     }
 
     let quickjs_version = fs::read_to_string(code_path.join("VERSION")).unwrap();
+    let mut sources = vec![
+        "cutils.c",
+        "libbf.c",
+        "libregexp.c",
+        "libunicode.c",
+        "quickjs.c",
+        "static-functions.c",
+    ];
+    if target_env == "gnu" {
+        sources.push("quickjs-libc.c");
+    }
+
     cc::Build::new()
-        .files(
-            [
-                "cutils.c",
-                "libbf.c",
-                "libregexp.c",
-                "libunicode.c",
-                "quickjs-libc.c",
-                "quickjs.c",
-                "static-functions.c",
-            ]
-            .iter()
-            .map(|f| code_path.join(f)),
-        )
+        .files(sources.iter().map(|f| code_path.join(f)))
         .define("_GNU_SOURCE", None)
         .define(
             "CONFIG_VERSION",

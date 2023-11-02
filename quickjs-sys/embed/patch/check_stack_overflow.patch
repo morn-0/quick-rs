@@ -12,4 +12,3 @@ index 48aeffc..45077cb 100644
 +    return unlikely(js_get_stack_pointer() < rt->stack_limit + alloca_size);
  }
  #endif
- 

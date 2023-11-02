@@ -28,4 +28,3 @@ index b315256..ccf0916 100644
 +    JS_PROP_DOUBLE_DEF("Infinity", INFINITY, 0 ),
      JS_PROP_DOUBLE_DEF("NaN", NAN, 0 ),
      JS_PROP_UNDEFINED_DEF("undefined", 0 ),
- 

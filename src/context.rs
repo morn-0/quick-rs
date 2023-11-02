@@ -3,11 +3,12 @@ use crate::{
     runtime::Runtime,
     value::{Exception, JSValueRef},
 };
-use log::error;
 use quickjs_sys as sys;
 use std::ffi::CString;
 
+#[cfg(target_env = "gnu")]
 const FLAGS: i32 = sys::JS_EVAL_TYPE_MODULE as i32;
+#[cfg(target_env = "gnu")]
 const SYS_MOD: &str = r#"import * as std from 'std';import * as os from 'os';globalThis.std = std;globalThis.os = os;"#;
 
 pub struct Context(pub *mut sys::JSContext);
@@ -22,15 +23,18 @@ impl From<&Runtime> for Context {
             sys::JS_AddIntrinsicOperators(ctx);
             sys::JS_EnableBignumExt(ctx, 1);
 
+            #[cfg(target_env = "gnu")]
             sys::js_init_module_std(ctx, "std\0".as_ptr() as *const _);
+            #[cfg(target_env = "gnu")]
             sys::js_init_module_os(ctx, "os\0".as_ptr() as *const _);
 
             ctx
         };
         let ctx = Context(ctx);
 
+        #[cfg(target_env = "gnu")]
         if let Err(e) = ctx.eval(SYS_MOD, "SYS_MOD", FLAGS) {
-            error!("{e}");
+            log::error!("{e}");
         }
 
         ctx
@@ -82,7 +86,9 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
+            #[cfg(target_env = "gnu")]
             let rt = sys::JS_GetRuntime(self.0);
+            #[cfg(target_env = "gnu")]
             sys::js_std_free_handlers(rt);
             sys::JS_FreeContext(self.0);
         }

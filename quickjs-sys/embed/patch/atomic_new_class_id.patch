@@ -21,4 +21,3 @@ index ccf0916..5098719 100644
 +#endif
      return class_id;
  }
- 

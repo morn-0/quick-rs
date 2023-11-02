@@ -1,0 +1,53 @@
+diff --git a/libregexp.c b/libregexp.c
+index 379bfc7..c37fd07 100644
+--- a/libregexp.c
++++ b/libregexp.c
+@@ -2527,7 +2527,7 @@ int lre_exec(uint8_t **capture,
+     for(i = 0; i < s->capture_count * 2; i++)
+         capture[i] = NULL;
+     alloca_size = s->stack_size_max * sizeof(stack_buf[0]);
+-    stack_buf = alloca(alloca_size);
++    stack_buf = _alloca(alloca_size);
+     ret = lre_exec_backtrack(s, capture, stack_buf, 0, bc_buf + RE_HEADER_LEN,
+                              cbuf + (cindex << cbuf_type), FALSE);
+     lre_realloc(s->opaque, s->state_stack, 0);
+diff --git a/quickjs.c b/quickjs.c
+index 7916013..0e50f38 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -5101,7 +5101,7 @@ static JSValue js_c_function_data_call(JSContext *ctx, JSValueConst func_obj,
+ 
+     /* XXX: could add the function on the stack for debug */
+     if (unlikely(argc < s->length)) {
+-        arg_buf = alloca(sizeof(arg_buf[0]) * s->length);
++        arg_buf = _alloca(sizeof(arg_buf[0]) * s->length);
+         for(i = 0; i < argc; i++)
+             arg_buf[i] = argv[i];
+         for(i = argc; i < s->length; i++)
+@@ -16049,7 +16049,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
+ 
+     if (unlikely(argc < arg_count)) {
+         /* ensure that at least argc_count arguments are readable */
+-        arg_buf = alloca(sizeof(arg_buf[0]) * arg_count);
++        arg_buf = _alloca(sizeof(arg_buf[0]) * arg_count);
+         for(i = 0; i < argc; i++)
+             arg_buf[i] = argv[i];
+         for(i = argc; i < arg_count; i++)
+@@ -16160,7 +16160,7 @@ static JSValue js_call_bound_function(JSContext *ctx, JSValueConst func_obj,
+     arg_count = bf->argc + argc;
+     if (js_check_stack_overflow(ctx->rt, sizeof(JSValue) * arg_count))
+         return JS_ThrowStackOverflow(ctx);
+-    arg_buf = alloca(sizeof(JSValue) * arg_count);
++    arg_buf = _alloca(sizeof(JSValue) * arg_count);
+     for(i = 0; i < bf->argc; i++) {
+         arg_buf[i] = bf->argv[i];
+     }
+@@ -16291,7 +16291,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+     init_list_head(&sf->var_ref_list);
+     var_refs = p->u.func.var_refs;
+ 
+-    local_buf = alloca(alloca_size);
++    local_buf = _alloca(alloca_size);
+     if (unlikely(arg_allocated_size)) {
+         int n = min_int(argc, b->arg_count);
+         arg_buf = local_buf;
