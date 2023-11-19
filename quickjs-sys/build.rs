@@ -38,11 +38,11 @@ fn main() {
     for patch in fs::read_dir(patch).unwrap() {
         let patch = patch.unwrap().path();
 
-        if target_os != "windows"
-            && target_env != "msvc"
-            && (patch.ends_with("basic_msvc_compat.patch")
-                || patch.ends_with("msvc_alloca_compat.patch"))
-        {
+        #[rustfmt::skip]
+        let if_msvc_patch = patch.ends_with("basic_msvc_compat.patch") || patch.ends_with("msvc_alloca_compat.patch");
+        let if_msvc = target_os == "windows" && target_env == "msvc";
+
+        if !if_msvc && if_msvc_patch {
             continue;
         }
 
@@ -57,7 +57,7 @@ fn main() {
     }
 
     let quickjs_version = fs::read_to_string(code_path.join("VERSION")).unwrap();
-    let mut sources = vec![
+    let sources = vec![
         "cutils.c",
         "libbf.c",
         "libregexp.c",
@@ -65,9 +65,6 @@ fn main() {
         "quickjs.c",
         "static-functions.c",
     ];
-    if target_env == "gnu" {
-        sources.push("quickjs-libc.c");
-    }
 
     cc::Build::new()
         .files(sources.iter().map(|f| code_path.join(f)))
@@ -94,7 +91,7 @@ fn main() {
         .flag_if_supported("-Wno-implicit-fallthrough")
         .flag_if_supported("-Wno-enum-conversion")
         .flag_if_supported("-Wunknown-pragmas")
-        .opt_level(2)
+        .opt_level(3)
         .compile(LIB_NAME);
 }
 
