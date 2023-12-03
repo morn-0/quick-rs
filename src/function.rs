@@ -15,10 +15,7 @@ impl Function {
     }
 
     pub fn call(&self, args: Vec<JSValueRef>) -> Result<JSValueRef, QuickError> {
-        let args = args
-            .iter()
-            .map(|arg| arg.val)
-            .collect::<Vec<sys::JSValue>>();
+        let args: Vec<_> = args.iter().map(|arg| arg.val).collect();
 
         let value = unsafe {
             let undefined = JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0);
