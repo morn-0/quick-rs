@@ -57,7 +57,7 @@ fn main() {
     }
 
     let quickjs_version = fs::read_to_string(code_path.join("VERSION")).unwrap();
-    let sources = vec![
+    let sources = [
         "cutils.c",
         "libbf.c",
         "libregexp.c",
@@ -73,6 +73,8 @@ fn main() {
             "CONFIG_VERSION",
             format!("\"{}\"", quickjs_version.trim()).as_str(),
         )
+        // .define("DUMP_LEAKS", None)
+        // .define("DUMP_FREE", None)
         .define("CONFIG_BIGNUM", None)
         .define("CONFIG_MODULE_EXPORT", None)
         .flag_if_supported("/std:c11")

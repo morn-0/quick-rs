@@ -1,13 +1,24 @@
 use crate::{context::Context, util};
+use compio::runtime as compio;
 use log::error;
 use quickjs_sys as sys;
 use std::{
+    cell::RefCell,
     ffi::{c_char, c_void, CStr},
     fs,
+    future::Future,
     mem::ManuallyDrop,
     path::Path,
-    ptr::null_mut,
+    pin::Pin,
+    ptr::{self, null_mut},
+    rc::Rc,
+    sync::Arc,
+    time::Duration,
 };
+
+thread_local! {
+    static CURRENT_RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
+}
 
 extern "C" fn module_normalize(
     ctx: *mut sys::JSContext,
@@ -80,8 +91,37 @@ impl Runtime {
 
             rt
         };
+        let rt = Self(rt);
 
-        Self(rt)
+        rt
+    }
+
+    pub fn event_loop<C, R>(&self, consumer: C) -> R
+    where
+        C: FnOnce(Rc<Context>) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,
+        R: Default + Send + 'static,
+    {
+        compio::block_on(async {
+            let mut ctx = Context::from(self);
+
+            let pctx = ptr::addr_of_mut!(ctx.0);
+            let ctx = Rc::new(ctx);
+
+            let result = compio::spawn({
+                let ctx = ctx.clone();
+
+                async move { consumer(ctx).await }
+            });
+
+            compio::time::sleep(Duration::from_millis(1)).await;
+            while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
+                unsafe {
+                    sys::JS_ExecutePendingJob(self.0, pctx);
+                }
+            }
+
+            result.await
+        })
     }
 
     pub fn gc(&self) {
