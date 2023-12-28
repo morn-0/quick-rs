@@ -57,7 +57,7 @@ fn main() {
     }
 
     let quickjs_version = fs::read_to_string(code_path.join("VERSION")).unwrap();
-    let sources = vec![
+    let sources = [
         "cutils.c",
         "libbf.c",
         "libregexp.c",

@@ -21,9 +21,8 @@ impl From<&Runtime> for Context {
 
             ctx
         };
-        let ctx = Context(ctx);
 
-        ctx
+        Context(ctx)
     }
 }
 

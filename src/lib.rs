@@ -10,7 +10,7 @@ pub mod value;
 
 #[test]
 fn test() {
-    let runtime = runtime::Runtime::new();
+    let runtime = runtime::Runtime::default();
     let context = context::Context::from(&runtime);
 
     let script = r#"
