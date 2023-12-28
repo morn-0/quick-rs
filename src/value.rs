@@ -1,8 +1,13 @@
 use crate::{error::QuickError, util};
 use quickjs_sys as sys;
-use std::{ffi::c_void, mem::ManuallyDrop};
+use std::{
+    ffi::{c_double, c_void},
+    mem::ManuallyDrop,
+    ptr,
+};
 
 extern "C" {
+    pub(crate) fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
     pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
     fn JS_VALUE_GET_INT_real(val: sys::JSValue) -> i32;
     fn JS_VALUE_GET_FLOAT64_real(val: sys::JSValue) -> f64;
@@ -114,4 +119,8 @@ pub fn make_null() -> sys::JSValue {
 
 pub fn make_int(value: i32) -> sys::JSValue {
     unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) }
+}
+
+pub fn make_float(value: f64) -> sys::JSValue {
+    unsafe { JS_NewFloat64_real(ptr::null_mut(), value) }
 }
