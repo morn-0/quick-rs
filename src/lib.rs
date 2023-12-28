@@ -1,4 +1,4 @@
-pub use quickjs_sys as qjs;
+pub use quickjs_sys as sys;
 
 pub mod context;
 pub mod error;
