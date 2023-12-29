@@ -1,7 +1,8 @@
 use crate::{error::QuickError, util};
+use anyhow::Result;
 use quickjs_sys as sys;
 use std::{
-    ffi::{c_double, c_void},
+    ffi::{c_double, c_void, CString},
     mem::ManuallyDrop,
     ptr,
 };
@@ -123,4 +124,13 @@ pub fn make_int(value: i32) -> sys::JSValue {
 
 pub fn make_float(value: f64) -> sys::JSValue {
     unsafe { JS_NewFloat64_real(ptr::null_mut(), value) }
+}
+
+pub fn make_string(ctx: *mut sys::JSContext, value: &str) -> Result<sys::JSValue> {
+    let c_value = match CString::new(value) {
+        Ok(c_value) => c_value,
+        Err(e) => return Err(anyhow::anyhow!(e)),
+    };
+
+    Ok(unsafe { sys::JS_NewString(ctx, c_value.as_ptr()) })
 }
