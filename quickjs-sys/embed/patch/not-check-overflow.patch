@@ -1,0 +1,27 @@
+From 1a1941eb62fe7944559baa92532ad68276037531 Mon Sep 17 00:00:00 2001
+From: morn-0 <90960002+morn-0@users.noreply.github.com>
+Date: Fri, 5 Jan 2024 07:13:01 +0000
+Subject: [PATCH] not check overflow
+
+---
+ quickjs.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/quickjs.c b/quickjs.c
+index 4c4d273..079400a 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -1578,9 +1578,7 @@ static inline uintptr_t js_get_stack_pointer(void)
+ 
+ static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
+ {
+-    uintptr_t sp;
+-    sp = js_get_stack_pointer() - alloca_size;
+-    return unlikely(sp < rt->stack_limit);
++    return FALSE;
+ }
+ #endif
+ 
+-- 
+2.43.0
+
