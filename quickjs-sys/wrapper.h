@@ -1,4 +1,3 @@
-#include "embed/quickjs/quickjs-libc.h"
 #include "embed/quickjs/quickjs.h"
 
 #if !defined(EMSCRIPTEN) && !defined(_MSC_VER)

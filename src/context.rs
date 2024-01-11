@@ -56,16 +56,6 @@ impl Context {
             }
         }
     }
-
-    pub fn new_string(&self, value: &str) -> Result<JSValueRef, QuickError> {
-        let c_value = match CString::new(value) {
-            Ok(c_value) => c_value,
-            Err(e) => return Err(QuickError::CStringError(e.to_string())),
-        };
-
-        let value = unsafe { sys::JS_NewString(self.0, c_value.as_ptr()) };
-        Ok(JSValueRef::from_js_value(self.0, value))
-    }
 }
 
 impl Drop for Context {

@@ -3,7 +3,6 @@ use compio::runtime as compio;
 use log::error;
 use quickjs_sys as sys;
 use std::{
-    cell::RefCell,
     ffi::{c_char, c_void, CStr},
     fs,
     future::Future,
@@ -12,12 +11,15 @@ use std::{
     pin::Pin,
     ptr::{self, null_mut},
     rc::Rc,
-    sync::Arc,
     time::Duration,
 };
 
-thread_local! {
-    static CURRENT_RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
+pub trait UserLoader {
+    fn load(
+        &self,
+        ctx: *mut sys::JSContext,
+        module_name: *const c_char,
+    ) -> Option<*mut sys::JSModuleDef>;
 }
 
 extern "C" fn module_normalize(
@@ -32,8 +34,17 @@ extern "C" fn module_normalize(
 extern "C" fn module_loader(
     ctx: *mut sys::JSContext,
     module_name: *const c_char,
-    _opaque: *mut c_void,
+    opaque: *mut c_void,
 ) -> *mut sys::JSModuleDef {
+    if !opaque.is_null() {
+        let loader = unsafe { Box::from_raw(opaque as *mut &mut dyn UserLoader) };
+        let loader = ManuallyDrop::new(loader);
+
+        if let Some(module) = loader.load(ctx, module_name) {
+            return module;
+        }
+    }
+
     let module_name = unsafe { CStr::from_ptr(module_name) }
         .to_string_lossy()
         .to_string();
@@ -68,7 +79,7 @@ extern "C" fn module_loader(
 pub struct Runtime(pub *mut sys::JSRuntime);
 
 impl Runtime {
-    pub fn new() -> Self {
+    pub fn new(loader: Option<Box<&mut dyn UserLoader>>) -> Self {
         let rt = unsafe {
             let rt = sys::JS_NewRuntime();
 
@@ -82,12 +93,12 @@ impl Runtime {
             #[cfg(target_pointer_width = "64")]
             let stack_size = 1024 * 1024 * 2;
             sys::JS_SetMaxStackSize(rt, stack_size);
-            sys::JS_SetModuleLoaderFunc(
-                rt,
-                Some(module_normalize),
-                Some(module_loader),
-                null_mut(),
-            );
+
+            let opaque = match loader {
+                Some(loader) => Box::into_raw(loader) as _,
+                None => null_mut(),
+            };
+            sys::JS_SetModuleLoaderFunc(rt, Some(module_normalize), Some(module_loader), opaque);
 
             rt
         };
@@ -133,7 +144,7 @@ impl Runtime {
 
 impl Default for Runtime {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 

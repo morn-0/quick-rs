@@ -39,3 +39,8 @@ JSValue JS_DupValue_real(JSContext *ctx, JSValue v)
 {
     return JS_DupValue(ctx, v);
 }
+
+JSValue JS_NewFloat64_real(JSContext *ctx, double d)
+{
+    return JS_NewFloat64(ctx, d);
+}
