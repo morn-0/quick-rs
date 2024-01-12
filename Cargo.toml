@@ -21,7 +21,4 @@ reqwest = { version = "0.11", features = [
 ], default-features = false }
 once_cell = { version = "1", features = ["std"], default-features = false }
 parking_lot = { version = "0.12", default-features = false }
-compio = { version = "0.8", features = [
-    "macros",
-    "time",
-], default-features = false }
+compio = { version = "0.8", features = ["time"], default-features = false }

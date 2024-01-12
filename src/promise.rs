@@ -1,70 +1,72 @@
-use crate::value::{self, Exception, JSValueRef};
+use crate::{
+    function::Function,
+    value::{self, Exception, JSValueRef},
+};
+use anyhow::Result;
 use parking_lot::Mutex;
 use quickjs_sys as sys;
 use std::{
     ffi::c_int,
     future::Future,
     pin::Pin,
-    ptr, slice,
-    sync::Arc,
+    slice,
+    sync::{Arc, Weak},
     task::{Context, Poll, Waker},
 };
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 struct PromiseState {
-    data: Option<*mut sys::JSValue>,
+    data: Option<JSValueRef>,
     waker: Option<Waker>,
 }
 
 pub struct Promise {
-    ctx: Mutex<*mut sys::JSContext>,
-    val: sys::JSValue,
+    value: JSValueRef,
     state: Arc<Mutex<PromiseState>>,
 }
 
 impl Promise {
-    pub fn new(ctx: *mut sys::JSContext, val: sys::JSValue) -> Self {
-        let state = PromiseState::default();
+    pub fn new(value: JSValueRef) -> Self {
+        let state = Arc::new(Mutex::new(PromiseState::default()));
 
-        Promise {
-            ctx: Mutex::new(ctx),
-            val,
-            state: Arc::new(Mutex::new(state)),
-        }
+        Promise { value, state }
     }
 }
 
 impl Future for Promise {
-    type Output = JSValueRef;
+    type Output = Result<JSValueRef>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.state.lock();
-        let ctx = self.ctx.lock();
 
         if let Some(data) = state.data.take() {
-            let data = unsafe { Box::from_raw(data) };
-            return Poll::Ready(JSValueRef::from_js_value(*ctx, *data));
+            return Poll::Ready(Ok(data));
         }
 
         if state.waker.replace(cx.waker().clone()).is_none() {
             unsafe {
+                let state = Box::into_raw(Box::new(Arc::downgrade(&self.state)));
+                let value = self.value.clone();
+
+                let ctx = value.ctx;
+                let this = value.val();
+
                 #[rustfmt::skip]
-                let then = sys::JS_GetPropertyInternal(*ctx, self.val, sys::JS_ATOM_then, self.val, 0);
+                let then = sys::JS_GetPropertyInternal(ctx, this, sys::JS_ATOM_then, this, 0);
+                let then = Function::new(JSValueRef::from_js_value(ctx, then)).unwrap();
 
-                let data = Box::into_raw(Box::new(self.state.clone()));
-                let reject = sys::JS_NewCFunctionData(*ctx, Some(reject), 1, 0, 1, data as _);
+                let resolve = sys::JS_NewCFunctionData(ctx, Some(resolve), 1, 0, 1, state as _);
+                let resolve = JSValueRef::from_js_value(ctx, resolve);
 
-                let data = Box::into_raw(Box::new(self.state.clone()));
-                let resolve = sys::JS_NewCFunctionData(*ctx, Some(resolve), 1, 0, 1, data as _);
+                let reject = sys::JS_NewCFunctionData(ctx, Some(reject), 1, 0, 1, state as _);
+                let reject = JSValueRef::from_js_value(ctx, reject);
 
-                let mut args = [resolve, reject];
+                let this = JSValueRef::from_js_value(ctx, this);
+                let value = then.call(Some(this), vec![resolve, reject]).unwrap();
 
-                let res = sys::JS_Call(*ctx, then, self.val, 2, ptr::addr_of_mut!(args) as _);
-                let val = JSValueRef::from_js_value(*ctx, res);
-
-                if val.is_exception() {
-                    let msg = Exception(val).to_string();
-                    println!("exception {msg}");
+                if value.is_exception() {
+                    let msg = Exception(value).to_string();
+                    return Poll::Ready(Err(anyhow::anyhow!(msg)));
                 }
             }
         }
@@ -73,46 +75,50 @@ impl Future for Promise {
     }
 }
 
-unsafe extern "C" fn reject(
+unsafe extern "C" fn resolve(
     ctx: *mut sys::JSContext,
-    this_val: sys::JSValue,
+    this: sys::JSValue,
     argc: c_int,
     argv: *mut sys::JSValue,
     magic: c_int,
-    func_data: *mut sys::JSValue,
+    data: *mut sys::JSValue,
 ) -> sys::JSValue {
-    println!("reject");
+    let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
+    let Some(state) = state.upgrade() else {
+        return value::make_undefined();
+    };
+    let mut state = state.lock();
 
-    let state = Box::from_raw(func_data as *mut Arc<Mutex<PromiseState>>);
-    if let Some(waker) = state.lock().waker.take() {
+    let args = slice::from_raw_parts(argv, argc as usize);
+    let value = if args.len() > 0 {
+        value::JS_DupValue_real(ctx, args[0])
+    } else {
+        value::make_undefined()
+    };
+
+    state.data = Some(JSValueRef::from_js_value(ctx, value));
+
+    if let Some(waker) = state.waker.take() {
         waker.wake();
     }
 
     value::make_undefined()
 }
 
-unsafe extern "C" fn resolve(
+unsafe extern "C" fn reject(
     ctx: *mut sys::JSContext,
-    _: sys::JSValue,
+    this: sys::JSValue,
     argc: c_int,
     argv: *mut sys::JSValue,
     magic: c_int,
-    func_data: *mut sys::JSValue,
+    data: *mut sys::JSValue,
 ) -> sys::JSValue {
-    println!("resolve");
-
-    let state = Box::from_raw(func_data as *mut Arc<Mutex<PromiseState>>);
-    let mut state = state.lock();
-
-    let args = slice::from_raw_parts(argv, argc as usize);
-    let val = if args.len() > 0 {
-        Box::into_raw(Box::new(args[0]))
-    } else {
-        Box::into_raw(Box::new(value::make_undefined()))
+    let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
+    let Some(state) = state.upgrade() else {
+        return value::make_undefined();
     };
-    state.data = Some(val);
 
-    if let Some(waker) = state.waker.take() {
+    if let Some(waker) = state.lock().waker.take() {
         waker.wake();
     }
 

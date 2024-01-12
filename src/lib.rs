@@ -11,10 +11,14 @@ pub mod value;
 
 #[test]
 fn test() {
-    let runtime = runtime::Runtime::new();
-    runtime.event_loop(|ctx| {
-        Box::pin(async move {
-            let script = r#"
+    let runtime = runtime::Runtime::new(None);
+    let context = std::rc::Rc::new(context::Context::from(&runtime));
+
+    for _ in 0..2 {
+        runtime.event_loop_with_ctx(
+            |ctx| {
+                Box::pin(async move {
+                    let script = r#"
 async function main() {
     return await test1();
 }
@@ -32,17 +36,18 @@ async function test3() {
 }
 
 async function test4() {
-    return "cnm, test";
+    return "test4";
 }
 
-main().then((value) => {
-return value;
-});
+await main();
 "#;
 
-            let value = ctx.eval_global(script, "main").unwrap();
-            let value = promise::Promise::new(ctx.0, value.val()).await;
-            println!("{}", value.to_string().unwrap());
-        })
-    });
+                    let value = ctx.eval_global(script, "main").unwrap();
+                    let value = promise::Promise::new(value).await.unwrap();
+                    println!("{}", value.to_string().unwrap());
+                })
+            },
+            context.clone(),
+        );
+    }
 }

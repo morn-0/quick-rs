@@ -107,22 +107,18 @@ impl Runtime {
         rt
     }
 
-    pub fn event_loop<C, R>(&self, consumer: C) -> R
+    pub fn event_loop_with_ctx<C, R>(&self, consumer: C, ctx: Rc<Context>) -> R
     where
         C: FnOnce(Rc<Context>) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,
-        R: Default + Send + 'static,
+        R: Send + 'static,
     {
         compio::block_on(async {
-            let mut ctx = Context::from(self);
+            let pctx = {
+                let mut ctx = ctx.0 as *mut sys::JSContext;
+                ptr::addr_of_mut!(ctx)
+            };
 
-            let pctx = ptr::addr_of_mut!(ctx.0);
-            let ctx = Rc::new(ctx);
-
-            let result = compio::spawn({
-                let ctx = ctx.clone();
-
-                async move { consumer(ctx).await }
-            });
+            let result = compio::spawn(consumer(ctx));
 
             compio::time::sleep(Duration::from_millis(1)).await;
             while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
