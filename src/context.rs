@@ -33,11 +33,7 @@ impl Context {
     }
 
     pub fn eval_global(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
-        self.eval(
-            src,
-            name,
-            (sys::JS_EVAL_TYPE_GLOBAL | sys::JS_EVAL_FLAG_ASYNC) as i32,
-        )
+        self.eval(src, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
     pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, QuickError> {
