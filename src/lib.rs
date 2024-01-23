@@ -12,13 +12,12 @@ pub mod value;
 #[test]
 fn test() {
     let runtime = runtime::Runtime::new(None);
-    let context = std::rc::Rc::new(context::Context::from(&runtime));
+    runtime.event_loop(|ctx| {
+        Box::pin(async move {
+            let mut tasks = vec![];
 
-    for _ in 0..2 {
-        runtime.event_loop_with_ctx(
-            |ctx| {
-                Box::pin(async move {
-                    let script = r#"
+            for i in 0..4650 {
+                let script = r#"
 async function main() {
     return await test1();
 }
@@ -39,15 +38,20 @@ async function test4() {
     return "test4";
 }
 
-await main();
+main();
 "#;
 
-                    let value = ctx.eval_global(script, "main").unwrap();
+                let value = ctx.eval_global(script, &format!("main_{i}")).unwrap();
+
+                tasks.push(compio::runtime::spawn(async move {
                     let value = promise::Promise::new(value).await.unwrap();
                     println!("{}", value.to_string().unwrap());
-                })
-            },
-            context.clone(),
-        );
-    }
+                }));
+            }
+
+            for task in tasks {
+                task.await;
+            }
+        })
+    });
 }

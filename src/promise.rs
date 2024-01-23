@@ -1,5 +1,6 @@
 use crate::{
     function::Function,
+    runtime::TASK,
     value::{self, Exception, JSValueRef},
 };
 use anyhow::Result;
@@ -8,9 +9,10 @@ use quickjs_sys as sys;
 use std::{
     ffi::c_int,
     future::Future,
+    mem::ManuallyDrop,
     pin::Pin,
     slice,
-    sync::{Arc, Weak},
+    sync::{atomic::Ordering, Arc, Weak},
     task::{Context, Poll, Waker},
 };
 
@@ -27,6 +29,10 @@ pub struct Promise {
 
 impl Promise {
     pub fn new(value: JSValueRef) -> Self {
+        TASK.with(|v| {
+            v.fetch_add(1, Ordering::Release);
+        });
+
         let state = Arc::new(Mutex::new(PromiseState::default()));
 
         Promise { value, state }
@@ -75,6 +81,14 @@ impl Future for Promise {
     }
 }
 
+impl Drop for Promise {
+    fn drop(&mut self) {
+        TASK.with(|v| {
+            v.fetch_sub(1, Ordering::Release);
+        });
+    }
+}
+
 unsafe extern "C" fn resolve(
     ctx: *mut sys::JSContext,
     this: sys::JSValue,
@@ -84,6 +98,8 @@ unsafe extern "C" fn resolve(
     data: *mut sys::JSValue,
 ) -> sys::JSValue {
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
+    let state = ManuallyDrop::new(state);
+
     let Some(state) = state.upgrade() else {
         return value::make_undefined();
     };
@@ -114,6 +130,8 @@ unsafe extern "C" fn reject(
     data: *mut sys::JSValue,
 ) -> sys::JSValue {
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
+    let state = ManuallyDrop::new(state);
+
     let Some(state) = state.upgrade() else {
         return value::make_undefined();
     };

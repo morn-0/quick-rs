@@ -35,6 +35,9 @@ impl Function {
                 args.as_ptr() as _,
             );
 
+            for arg in args {
+                value::JS_FreeValue_real(self.value.ctx, arg);
+            }
             value::JS_FreeValue_real(self.value.ctx, this);
 
             result
