@@ -8,7 +8,12 @@ members = ["quickjs-sys"]
 
 [features]
 default = ["check-overflow"]
-check-overflow = ["quickjs-sys/check-overflow"]
+check-overflow = [
+    "quickjs-sys/check-overflow",
+    "compio",
+    "flume",
+    "futures-util",
+]
 
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
@@ -21,8 +26,12 @@ reqwest = { version = "0.11", features = [
 ], default-features = false }
 once_cell = { version = "1", features = ["std"], default-features = false }
 parking_lot = { version = "0.12", default-features = false }
-compio = { version = "0.8", features = ["runtime"], default-features = false }
-flume = { version = "0.11", features = ["async"], default-features = false }
+compio = { version = "0.8", features = [
+    "runtime",
+], default-features = false, optional = true }
+flume = { version = "0.11", features = [
+    "async",
+], default-features = false, optional = true }
 futures-util = { version = "0.3", features = [
     "async-await-macro",
-], default-features = false }
+], default-features = false, optional = true }

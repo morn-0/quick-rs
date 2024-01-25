@@ -1,19 +1,21 @@
 use crate::{context::Context, util};
+#[cfg(feature = "check-overflow")]
 use compio::runtime as compio;
+#[cfg(feature = "check-overflow")]
 use flume::{Receiver, Sender};
 use log::error;
 use quickjs_sys as sys;
 use std::{
     ffi::{c_char, c_void, CStr},
     fs,
-    future::Future,
     mem::ManuallyDrop,
     path::Path,
-    pin::Pin,
-    ptr::{self, null_mut},
-    rc::Rc,
+    ptr::null_mut,
 };
+#[cfg(feature = "check-overflow")]
+use std::{future::Future, pin::Pin, ptr, rc::Rc};
 
+#[cfg(feature = "check-overflow")]
 thread_local! {
     pub static TASK_CHANNEL: (Sender<()>, Receiver<()>) = flume::unbounded();
 }
@@ -110,6 +112,7 @@ impl Runtime {
         Self(rt)
     }
 
+    #[cfg(feature = "check-overflow")]
     pub fn event_loop<C, R>(&self, consumer: C, context: Rc<Context>) -> R
     where
         C: FnOnce(Rc<Context>) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,
