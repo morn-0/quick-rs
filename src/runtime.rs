@@ -1,5 +1,6 @@
 use crate::{context::Context, util};
 use compio::runtime as compio;
+use flume::{Receiver, Sender};
 use log::error;
 use quickjs_sys as sys;
 use std::{
@@ -11,12 +12,10 @@ use std::{
     pin::Pin,
     ptr::{self, null_mut},
     rc::Rc,
-    sync::atomic::{AtomicI32, Ordering},
-    time::Duration,
 };
 
 thread_local! {
-    pub static TASK: AtomicI32 = AtomicI32::new(0);
+    pub static TASK_CHANNEL: (Sender<()>, Receiver<()>) = flume::unbounded();
 }
 
 pub trait UserLoader {
@@ -107,63 +106,48 @@ impl Runtime {
 
             rt
         };
-        let rt = Self(rt);
 
-        rt
+        Self(rt)
     }
 
-    pub fn event_loop<C, R>(&self, consumer: C) -> R
-    where
-        C: FnOnce(Context) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,
-        R: Send + 'static,
-    {
-        compio::block_on(async {
-            let ctx = Context::from(self);
-
-            let pctx = {
-                let mut ctx = ctx.0;
-                ptr::addr_of_mut!(ctx)
-            };
-
-            let result = compio::spawn(consumer(ctx));
-            compio::time::sleep(Duration::from_millis(1)).await;
-
-            while TASK.with(|v| v.load(Ordering::Acquire)) != 0 {
-                while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
-                    unsafe {
-                        sys::JS_ExecutePendingJob(self.0, pctx);
-                    }
-                }
-                compio::time::sleep(Duration::from_millis(1)).await;
-            }
-
-            result.await
-        })
-    }
-
-    pub fn event_loop_with_context<C, R>(&self, consumer: C, context: Rc<Context>) -> R
+    pub fn event_loop<C, R>(&self, consumer: C, context: Rc<Context>) -> R
     where
         C: FnOnce(Rc<Context>) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,
         R: Send + 'static,
     {
         compio::block_on(async {
-            let ctx = context;
+            let (done_tx, done_rx) = flume::bounded(0);
 
             let pctx = {
-                let mut ctx = ctx.0;
+                let mut ctx = context.0;
                 ptr::addr_of_mut!(ctx)
             };
 
-            let result = compio::spawn(consumer(ctx.clone()));
-            compio::time::sleep(Duration::from_millis(1)).await;
+            let result = compio::spawn(async move {
+                let reulst = consumer(context.clone()).await;
 
-            while TASK.with(|v| v.load(Ordering::Acquire)) != 0 {
-                while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
-                    unsafe {
-                        sys::JS_ExecutePendingJob(self.0, pctx);
+                if let Err(e) = done_tx.send_async(()).await {
+                    error!("{e}");
+                }
+
+                reulst
+            });
+
+            loop {
+                let receiver = TASK_CHANNEL.with(|v| v.1.clone());
+
+                futures_util::select! {
+                    _ = done_rx.recv_async() => {
+                        break;
+                    },
+                    _ = receiver.recv_async() => {
+                        while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
+                            unsafe {
+                                sys::JS_ExecutePendingJob(self.0, pctx);
+                            }
+                        }
                     }
                 }
-                compio::time::sleep(Duration::from_millis(1)).await;
             }
 
             result.await

@@ -1,9 +1,10 @@
 use crate::{
     function::Function,
-    runtime::TASK,
+    runtime::TASK_CHANNEL,
     value::{self, Exception, JSValueRef},
 };
 use anyhow::Result;
+use log::error;
 use parking_lot::Mutex;
 use quickjs_sys as sys;
 use std::{
@@ -11,8 +12,9 @@ use std::{
     future::Future,
     mem::ManuallyDrop,
     pin::Pin,
+    rc::Rc,
     slice,
-    sync::{atomic::Ordering, Arc, Weak},
+    sync::{Arc, Weak},
     task::{Context, Poll, Waker},
 };
 
@@ -24,17 +26,12 @@ struct PromiseState {
 
 pub struct Promise {
     value: JSValueRef,
-    state: Arc<Mutex<PromiseState>>,
+    state: Rc<Mutex<PromiseState>>,
 }
 
 impl Promise {
     pub fn new(value: JSValueRef) -> Self {
-        TASK.with(|v| {
-            v.fetch_add(1, Ordering::Release);
-        });
-
-        let state = Arc::new(Mutex::new(PromiseState::default()));
-
+        let state = Rc::new(Mutex::new(PromiseState::default()));
         Promise { value, state }
     }
 }
@@ -51,7 +48,7 @@ impl Future for Promise {
 
         if state.waker.replace(cx.waker().clone()).is_none() {
             unsafe {
-                let state = Box::into_raw(Box::new(Arc::downgrade(&self.state)));
+                let state = Box::into_raw(Box::new(Rc::downgrade(&self.state)));
                 let value = self.value.clone();
 
                 let ctx = value.ctx;
@@ -59,7 +56,12 @@ impl Future for Promise {
 
                 #[rustfmt::skip]
                 let then = sys::JS_GetPropertyInternal(ctx, this, sys::JS_ATOM_then, this, 0);
-                let then = Function::new(JSValueRef::from_js_value(ctx, then)).unwrap();
+                let then = match Function::new(JSValueRef::from_js_value(ctx, then)) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Poll::Ready(Err(e));
+                    }
+                };
 
                 let resolve = sys::JS_NewCFunctionData(ctx, Some(resolve), 1, 0, 1, state as _);
                 let resolve = JSValueRef::from_js_value(ctx, resolve);
@@ -68,24 +70,28 @@ impl Future for Promise {
                 let reject = JSValueRef::from_js_value(ctx, reject);
 
                 let this = JSValueRef::from_js_value(ctx, this);
-                let value = then.call(Some(this), vec![resolve, reject]).unwrap();
+                let value = match then.call(Some(this), vec![resolve, reject]) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        println!("cnm");
+                        return Poll::Ready(Err(anyhow::anyhow!(e.to_string())));
+                    }
+                };
 
                 if value.is_exception() {
                     let msg = Exception(value).to_string();
                     return Poll::Ready(Err(anyhow::anyhow!(msg)));
                 }
             }
+
+            TASK_CHANNEL.with(|v| {
+                if let Err(e) = v.0.send(()) {
+                    error!("{e}");
+                }
+            });
         }
 
         Poll::Pending
-    }
-}
-
-impl Drop for Promise {
-    fn drop(&mut self) {
-        TASK.with(|v| {
-            v.fetch_sub(1, Ordering::Release);
-        });
     }
 }
 
@@ -106,7 +112,7 @@ unsafe extern "C" fn resolve(
     let mut state = state.lock();
 
     let args = slice::from_raw_parts(argv, argc as usize);
-    let value = if args.len() > 0 {
+    let value = if !args.is_empty() {
         value::JS_DupValue_real(ctx, args[0])
     } else {
         value::make_undefined()
