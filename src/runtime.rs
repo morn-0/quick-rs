@@ -124,7 +124,7 @@ impl Runtime {
             };
 
             let result = compio::spawn(async move {
-                let reulst = consumer(context.clone()).await;
+                let reulst = consumer(context).await;
 
                 if let Err(e) = done_tx.send_async(()).await {
                     error!("{e}");

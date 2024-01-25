@@ -14,7 +14,7 @@ use std::{
     pin::Pin,
     rc::Rc,
     slice,
-    sync::{Arc, Weak},
+    sync::Weak,
     task::{Context, Poll, Waker},
 };
 
@@ -73,7 +73,6 @@ impl Future for Promise {
                 let value = match then.call(Some(this), vec![resolve, reject]) {
                     Ok(v) => v,
                     Err(e) => {
-                        println!("cnm");
                         return Poll::Ready(Err(anyhow::anyhow!(e.to_string())));
                     }
                 };
@@ -97,10 +96,10 @@ impl Future for Promise {
 
 unsafe extern "C" fn resolve(
     ctx: *mut sys::JSContext,
-    this: sys::JSValue,
+    _this: sys::JSValue,
     argc: c_int,
     argv: *mut sys::JSValue,
-    magic: c_int,
+    _magic: c_int,
     data: *mut sys::JSValue,
 ) -> sys::JSValue {
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
@@ -128,11 +127,11 @@ unsafe extern "C" fn resolve(
 }
 
 unsafe extern "C" fn reject(
-    ctx: *mut sys::JSContext,
-    this: sys::JSValue,
-    argc: c_int,
-    argv: *mut sys::JSValue,
-    magic: c_int,
+    _ctx: *mut sys::JSContext,
+    _this: sys::JSValue,
+    _argc: c_int,
+    _argv: *mut sys::JSValue,
+    _magic: c_int,
     data: *mut sys::JSValue,
 ) -> sys::JSValue {
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
