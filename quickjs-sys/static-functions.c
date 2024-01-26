@@ -10,6 +10,11 @@ int JS_VALUE_GET_INT_real(JSValue val)
     return JS_VALUE_GET_INT(val);
 }
 
+int JS_IsArrayBuffer_real(JSValue val)
+{
+    return JS_IsArrayBuffer(val);
+}
+
 double JS_VALUE_GET_FLOAT64_real(JSValue val)
 {
     return JS_VALUE_GET_FLOAT64(val);

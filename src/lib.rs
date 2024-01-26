@@ -14,13 +14,18 @@ fn test() {
     let context = context::Context::from(&runtime);
 
     let script = r#"
-async function main() {
-    return "test";
+function main() {
+    let buffer = new ArrayBuffer(10);
+    let array = new Uint8Array(buffer);
+    for (var i = 0; i < array.length; i++) {
+        array[i] = i * 10;
+    }
+    return array;
 }
 
 main();
 "#;
     let value = context.eval_global(script, "main");
 
-    println!("{:?}", value.map(|v| v.tag()).unwrap());
+    println!("{:?}", value.map(|v| v.to_buffer::<u8>()).unwrap());
 }

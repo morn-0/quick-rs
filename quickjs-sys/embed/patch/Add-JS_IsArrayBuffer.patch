@@ -1,0 +1,49 @@
+From 5439b3bf8f92453c161422b91499359528a0c1ba Mon Sep 17 00:00:00 2001
+From: morn-0 <90960002+morn-0@users.noreply.github.com>
+Date: Fri, 26 Jan 2024 14:38:48 +0800
+Subject: [PATCH] Add JS_IsArrayBuffer function
+
+---
+ quickjs.c | 13 +++++++++++++
+ quickjs.h |  1 +
+ 2 files changed, 14 insertions(+)
+
+diff --git a/quickjs.c b/quickjs.c
+index 4e58a98..23a0e3e 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -12017,6 +12017,19 @@ int JS_IsArray(JSContext *ctx, JSValueConst val)
+     }
+ }
+ 
++int JS_IsArrayBuffer(JSValueConst val)
++{
++    JSObject *p;
++    if (JS_VALUE_GET_TAG(val) != JS_TAG_OBJECT)
++        return FALSE;
++    p = JS_VALUE_GET_OBJ(val);
++    if (p->class_id != JS_CLASS_ARRAY_BUFFER &&
++        p->class_id != JS_CLASS_UINT8_ARRAY) {
++        return FALSE;
++    }
++    return TRUE;
++}
++
+ static double js_pow(double a, double b)
+ {
+     if (unlikely(!isfinite(b)) && fabs(a) == 1) {
+diff --git a/quickjs.h b/quickjs.h
+index 700ee61..41e26f9 100644
+--- a/quickjs.h
++++ b/quickjs.h
+@@ -722,6 +722,7 @@ JS_BOOL JS_SetConstructorBit(JSContext *ctx, JSValueConst func_obj, JS_BOOL val)
+ 
+ JSValue JS_NewArray(JSContext *ctx);
+ int JS_IsArray(JSContext *ctx, JSValueConst val);
++int JS_IsArrayBuffer(JSValueConst val);
+ 
+ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+                                JSAtom prop, JSValueConst receiver,
+-- 
+2.43.0
+
