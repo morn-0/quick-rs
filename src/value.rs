@@ -3,13 +3,14 @@ use anyhow::Result;
 use quickjs_sys as sys;
 use std::{
     ffi::{c_double, c_void, CString},
-    mem::ManuallyDrop,
-    ptr,
+    mem::{self, ManuallyDrop, MaybeUninit},
+    ptr, slice,
 };
 
 extern "C" {
     pub(crate) fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
     pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
+    pub(crate) fn JS_IsArrayBuffer_real(val: sys::JSValue) -> i32;
     fn JS_VALUE_GET_INT_real(val: sys::JSValue) -> i32;
     fn JS_VALUE_GET_FLOAT64_real(val: sys::JSValue) -> f64;
     fn JS_ValueGetTag_real(v: sys::JSValue) -> i32;
@@ -35,6 +36,20 @@ impl JSValueRef {
     #[inline(always)]
     pub fn is_exception(&self) -> bool {
         self.tag == sys::JS_TAG_EXCEPTION
+    }
+
+    pub fn to_buffer<T: Copy>(&self) -> Result<Vec<T>, QuickError> {
+        if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
+            let mut size = MaybeUninit::<usize>::uninit();
+
+            let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx, size.as_mut_ptr(), self.val) };
+            let len: usize = unsafe { size.assume_init() };
+
+            let len = len / mem::size_of::<T>();
+            Ok(unsafe { slice::from_raw_parts(ptr.cast(), len) }.to_vec())
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
     }
 
     pub fn to_string(&self) -> Result<String, QuickError> {
@@ -112,6 +127,10 @@ impl ToString for Exception {
 
 pub fn make_undefined() -> sys::JSValue {
     unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) }
+}
+
+pub fn make_bool(flag: bool) -> sys::JSValue {
+    unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if flag { 1 } else { 0 }) }
 }
 
 pub fn make_null() -> sys::JSValue {
