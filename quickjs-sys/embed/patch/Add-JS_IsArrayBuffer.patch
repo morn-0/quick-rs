@@ -23,7 +23,7 @@ index 4e58a98..23a0e3e 100644
 +        return FALSE;
 +    p = JS_VALUE_GET_OBJ(val);
 +    if (p->class_id != JS_CLASS_ARRAY_BUFFER &&
-+        p->class_id != JS_CLASS_UINT8_ARRAY) {
++        p->class_id != JS_CLASS_SHARED_ARRAY_BUFFER) {
 +        return FALSE;
 +    }
 +    return TRUE;
