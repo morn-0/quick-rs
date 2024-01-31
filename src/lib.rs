@@ -25,7 +25,7 @@ function main() {
 
 main();
 "#;
-    let value = context.eval_global(script, "main");
-
-    println!("{:?}", value.map(|v| v.to_buffer::<u8>()).unwrap());
+    let mut value = context.eval_global(script, "main").unwrap();
+    let buffer = value.get_buffer_mut::<u8>().unwrap();
+    println!("{:?}", buffer);
 }

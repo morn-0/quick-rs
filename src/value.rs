@@ -38,7 +38,7 @@ impl JSValueRef {
         self.tag == sys::JS_TAG_EXCEPTION
     }
 
-    pub fn to_buffer<T: Copy>(&self) -> Result<Vec<T>, QuickError> {
+    pub fn get_buffer_mut<T: Copy>(&mut self) -> Result<&mut [T], QuickError> {
         if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
 
@@ -46,7 +46,7 @@ impl JSValueRef {
             let len: usize = unsafe { size.assume_init() };
 
             let len = len / mem::size_of::<T>();
-            Ok(unsafe { slice::from_raw_parts(ptr.cast(), len) }.to_vec())
+            Ok(unsafe { slice::from_raw_parts_mut(ptr.cast(), len) })
         } else {
             Err(QuickError::UnsupportedTypeError(self.tag))
         }
