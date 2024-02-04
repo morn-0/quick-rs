@@ -20,12 +20,12 @@ function main() {
     for (var i = 0; i < array.length; i++) {
         array[i] = i * 10;
     }
-    return array;
+    return array.buffer;
 }
 
 main();
 "#;
     let mut value = context.eval_global(script, "main").unwrap();
-    let buffer = value.get_buffer_mut::<u8>().unwrap();
+    let buffer = value.buffer_mut::<u8>().unwrap();
     println!("{:?}", buffer);
 }

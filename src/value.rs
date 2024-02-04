@@ -2,6 +2,7 @@ use crate::{error::QuickError, util};
 use anyhow::Result;
 use quickjs_sys as sys;
 use std::{
+    f64,
     ffi::{c_double, c_void, CString},
     mem::{self, ManuallyDrop, MaybeUninit},
     ptr, slice,
@@ -18,6 +19,17 @@ extern "C" {
     pub(crate) fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
     pub(crate) fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
 }
+
+pub trait Number {}
+
+impl Number for i8 {}
+impl Number for u8 {}
+impl Number for i16 {}
+impl Number for u16 {}
+impl Number for i32 {}
+impl Number for u32 {}
+impl Number for f32 {}
+impl Number for f64 {}
 
 pub struct JSValueRef {
     pub ctx: *mut sys::JSContext,
@@ -38,7 +50,21 @@ impl JSValueRef {
         self.tag == sys::JS_TAG_EXCEPTION
     }
 
-    pub fn get_buffer_mut<T: Copy>(&mut self) -> Result<&mut [T], QuickError> {
+    pub fn buffer<T: Number>(&self) -> Result<&[T], QuickError> {
+        if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
+            let mut size = MaybeUninit::<usize>::uninit();
+
+            let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx, size.as_mut_ptr(), self.val) };
+            let len: usize = unsafe { size.assume_init() };
+
+            let len = len / mem::size_of::<T>();
+            Ok(unsafe { slice::from_raw_parts(ptr.cast(), len) })
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
+    }
+
+    pub fn buffer_mut<T: Number>(&mut self) -> Result<&mut [T], QuickError> {
         if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
 
