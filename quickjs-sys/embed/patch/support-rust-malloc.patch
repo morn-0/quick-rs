@@ -1,0 +1,87 @@
+From 4c64ffbdee3f94287861af12dc72fb20be864323 Mon Sep 17 00:00:00 2001
+From: morn-0 <90960002+morn-0@users.noreply.github.com>
+Date: Tue, 6 Feb 2024 02:44:10 -0500
+Subject: [PATCH] support rust malloc
+
+---
+ quickjs.c | 21 +++++----------------
+ quickjs.h |  5 +++++
+ 2 files changed, 10 insertions(+), 16 deletions(-)
+
+diff --git a/quickjs.c b/quickjs.c
+index 7958f81..dd82c28 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -1695,18 +1695,7 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
+ /* default memory allocation functions with memory limitation */
+ static size_t js_def_malloc_usable_size(const void *ptr)
+ {
+-#if defined(__APPLE__)
+-    return malloc_size(ptr);
+-#elif defined(_WIN32)
+-    return _msize((void *)ptr);
+-#elif defined(EMSCRIPTEN)
+-    return 0;
+-#elif defined(__linux__)
+-    return malloc_usable_size((void *)ptr);
+-#else
+-    /* change this to `return 0;` if compilation fails */
+-    return malloc_usable_size((void *)ptr);
+-#endif
++    return rust_usable_size(ptr);
+ }
+ 
+ static void *js_def_malloc(JSMallocState *s, size_t size)
+@@ -1719,7 +1708,7 @@ static void *js_def_malloc(JSMallocState *s, size_t size)
+     if (unlikely(s->malloc_size + size > s->malloc_limit))
+         return NULL;
+ 
+-    ptr = malloc(size);
++    ptr = rust_malloc(size);
+     if (!ptr)
+         return NULL;
+ 
+@@ -1735,7 +1724,7 @@ static void js_def_free(JSMallocState *s, void *ptr)
+ 
+     s->malloc_count--;
+     s->malloc_size -= js_def_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+-    free(ptr);
++    rust_free(ptr);
+ }
+ 
+ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
+@@ -1751,13 +1740,13 @@ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
+     if (size == 0) {
+         s->malloc_count--;
+         s->malloc_size -= old_size + MALLOC_OVERHEAD;
+-        free(ptr);
++        rust_free(ptr);
+         return NULL;
+     }
+     if (s->malloc_size + size - old_size > s->malloc_limit)
+         return NULL;
+ 
+-    ptr = realloc(ptr, size);
++    ptr = rust_realloc(ptr, size);
+     if (!ptr)
+         return NULL;
+ 
+diff --git a/quickjs.h b/quickjs.h
+index 56bac64..96bce4b 100644
+--- a/quickjs.h
++++ b/quickjs.h
+@@ -384,6 +384,11 @@ void JS_EnableBignumExt(JSContext *ctx, JS_BOOL enable);
+ JSValue js_string_codePointRange(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+ 
++void* rust_malloc(size_t size);
++void* rust_realloc(void* p, size_t newsize);
++void rust_free(void* p);
++size_t rust_usable_size(const void* p);
++
+ void *js_malloc_rt(JSRuntime *rt, size_t size);
+ void js_free_rt(JSRuntime *rt, void *ptr);
+ void *js_realloc_rt(JSRuntime *rt, void *ptr, size_t size);
+-- 
+2.39.2
+
