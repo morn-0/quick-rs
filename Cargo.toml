@@ -6,10 +6,6 @@ edition = "2021"
 [workspace]
 members = ["quickjs-sys"]
 
-[features]
-default = ["check-overflow"]
-check-overflow = ["quickjs-sys/check-overflow"]
-
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
 thiserror = { version = "1", default-features = false }
