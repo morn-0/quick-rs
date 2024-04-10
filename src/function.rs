@@ -1,6 +1,6 @@
 use crate::{
     error::QuickError,
-    value::{self, Exception, JSValueRef, JS_MKVAL_real},
+    value::{self, Exception, JSValueRef},
 };
 use anyhow::Result;
 use quickjs_sys as sys;
@@ -19,28 +19,20 @@ impl Function {
         this: Option<JSValueRef>,
         args: Vec<JSValueRef>,
     ) -> Result<JSValueRef, QuickError> {
-        let args: Vec<_> = args.into_iter().map(|arg| arg.val()).collect();
+        let this_raw = match this {
+            Some(ref v) => v.val,
+            None => value::make_undefined(),
+        };
+        let args_raw: Vec<_> = args.iter().map(|arg| arg.val).collect();
 
         let value = unsafe {
-            let this = match this {
-                Some(v) => v.val(),
-                None => JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0),
-            };
-
-            let result = sys::JS_Call(
+            sys::JS_Call(
                 self.value.ctx,
                 self.value.val,
-                this,
-                args.len() as _,
-                args.as_ptr() as _,
-            );
-
-            for arg in args {
-                value::JS_FreeValue_real(self.value.ctx, arg);
-            }
-            value::JS_FreeValue_real(self.value.ctx, this);
-
-            result
+                this_raw,
+                args_raw.len() as _,
+                args_raw.as_ptr() as _,
+            )
         };
 
         let value = JSValueRef::from_js_value(self.value.ctx, value);
