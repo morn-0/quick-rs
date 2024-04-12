@@ -1,5 +1,4 @@
 use crate::context::Context;
-use compio::runtime as compio;
 use flume::{Receiver, Sender};
 use log::error;
 use quickjs_sys as sys;
@@ -14,6 +13,7 @@ use std::{future::Future, pin::Pin, ptr, rc::Rc};
 
 thread_local! {
     pub static TASK_CHANNEL: (Sender<()>, Receiver<()>) = flume::unbounded();
+    static COMPIO: compio::runtime::Runtime = compio::runtime::Runtime::new().unwrap();
 }
 
 pub trait UserLoader {
@@ -117,42 +117,44 @@ impl Runtime {
         C: FnOnce(Rc<Context>) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,
         R: Send + 'static,
     {
-        compio::block_on(async {
-            let (done_tx, done_rx) = flume::bounded(0);
+        COMPIO.with(|c| {
+            c.block_on(async {
+                let (done_tx, done_rx) = flume::bounded(0);
 
-            let pctx = {
-                let mut ctx = context.0;
-                ptr::addr_of_mut!(ctx)
-            };
+                let pctx = {
+                    let mut ctx = context.0;
+                    ptr::addr_of_mut!(ctx)
+                };
 
-            let result = compio::spawn(async move {
-                let reulst = consumer(context).await;
+                let result = compio::runtime::spawn(async move {
+                    let reulst = consumer(context).await;
 
-                if let Err(e) = done_tx.send_async(()).await {
-                    error!("{e}");
-                }
+                    if let Err(e) = done_tx.send_async(()).await {
+                        error!("{e}");
+                    }
 
-                reulst
-            });
+                    reulst
+                });
 
-            loop {
-                let receiver = TASK_CHANNEL.with(|v| v.1.clone());
+                loop {
+                    let receiver = TASK_CHANNEL.with(|v| v.1.clone());
 
-                futures_util::select! {
-                    _ = done_rx.recv_async() => {
-                        break;
-                    },
-                    _ = receiver.recv_async() => {
-                        while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
-                            unsafe {
-                                sys::JS_ExecutePendingJob(self.0, pctx);
+                    futures_util::select! {
+                        _ = done_rx.recv_async() => {
+                            break;
+                        },
+                        _ = receiver.recv_async() => {
+                            while unsafe { sys::JS_IsJobPending(self.0) } > 0 {
+                                unsafe {
+                                    sys::JS_ExecutePendingJob(self.0, pctx);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            result.await
+                result.await
+            })
         })
     }
 
