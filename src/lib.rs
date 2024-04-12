@@ -35,7 +35,10 @@ main();
     let script = r#"
 export function main(uint8) {
     uint8[1] = 43;
-    return uint8;
+    return {
+        "data": uint8,
+        "array": [1, "2"]
+    };
 }
 "#;
     let value = context.eval_module(script, "_main").unwrap();
@@ -44,9 +47,21 @@ export function main(uint8) {
     let value = module.get("main").unwrap();
     let function = Function::new(value).unwrap();
 
-    let value = function.call(None, vec![val]).unwrap();
-    println!(
-        "{:?}",
-        value.property("buffer").unwrap().to_buffer::<u8>().unwrap()
-    );
+    for _ in 0..10 {
+        let value = function.call(None, vec![val.clone()]).unwrap();
+        println!(
+            "{:?}",
+            value
+                .property("data")
+                .unwrap()
+                .property("buffer")
+                .unwrap()
+                .to_buffer::<u8>()
+                .unwrap()
+        );
+
+        let array = value.property("array").unwrap().to_array().unwrap();
+        println!("{}", array.first().unwrap().to_i32().unwrap());
+        println!("{}", array.get(1).unwrap().to_string().unwrap());
+    }
 }

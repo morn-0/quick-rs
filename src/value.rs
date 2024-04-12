@@ -93,6 +93,22 @@ impl JSValueRef {
         }
     }
 
+    pub fn to_array(&self) -> Result<Vec<JSValueRef>, QuickError> {
+        let length = self.property("length")?;
+        let length = length.to_i32()?;
+
+        let mut array = Vec::with_capacity(length as usize);
+
+        for i in 0..length {
+            unsafe {
+                let value = sys::JS_GetPropertyUint32(self.ctx, self.val, i as u32);
+                array.push(JSValueRef::from_js_value(self.ctx, value));
+            }
+        }
+
+        Ok(array)
+    }
+
     pub fn to_buffer<T: Number>(&self) -> Result<&[T], QuickError> {
         if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
