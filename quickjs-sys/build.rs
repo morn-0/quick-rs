@@ -46,11 +46,6 @@ fn main() {
             continue;
         }
 
-        #[cfg(feature = "check-overflow")]
-        if patch.ends_with("not-check-overflow.patch") {
-            continue;
-        }
-
         Command::new("patch")
             .current_dir(&code_path)
             .arg("-i")

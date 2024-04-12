@@ -1,7 +1,5 @@
-use crate::{context::Context, util};
-#[cfg(feature = "check-overflow")]
+use crate::context::Context;
 use compio::runtime as compio;
-#[cfg(feature = "check-overflow")]
 use flume::{Receiver, Sender};
 use log::error;
 use quickjs_sys as sys;
@@ -12,10 +10,8 @@ use std::{
     path::Path,
     ptr::null_mut,
 };
-#[cfg(feature = "check-overflow")]
 use std::{future::Future, pin::Pin, ptr, rc::Rc};
 
-#[cfg(feature = "check-overflow")]
 thread_local! {
     pub static TASK_CHANNEL: (Sender<()>, Receiver<()>) = flume::unbounded();
 }
@@ -42,6 +38,10 @@ extern "C" fn module_loader(
     module_name: *const c_char,
     opaque: *mut c_void,
 ) -> *mut sys::JSModuleDef {
+    fn is_url(url: &str) -> bool {
+        url.starts_with("https://") || url.starts_with("http://")
+    }
+
     if !opaque.is_null() {
         let loader = unsafe { Box::from_raw(opaque as *mut &mut dyn UserLoader) };
         let loader = ManuallyDrop::new(loader);
@@ -55,7 +55,7 @@ extern "C" fn module_loader(
         .to_string_lossy()
         .to_string();
 
-    let src = if util::is_url(&module_name) {
+    let src = if is_url(&module_name) {
         if let Ok(request) = reqwest::blocking::get(&module_name) {
             request.text().ok()
         } else {
@@ -112,7 +112,6 @@ impl Runtime {
         Self(rt)
     }
 
-    #[cfg(feature = "check-overflow")]
     pub fn event_loop<C, R>(&self, consumer: C, context: Rc<Context>) -> R
     where
         C: FnOnce(Rc<Context>) -> Pin<Box<dyn Future<Output = R>>> + Send + 'static,

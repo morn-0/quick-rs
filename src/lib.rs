@@ -4,55 +4,66 @@ pub mod context;
 pub mod error;
 pub mod function;
 pub mod module;
-#[cfg(feature = "check-overflow")]
 pub mod promise;
 pub mod runtime;
-pub mod util;
 pub mod value;
 
-#[cfg(feature = "check-overflow")]
 #[test]
 fn test() {
-    {
-        let runtime = runtime::Runtime::new(None);
-        let context = context::Context::from(&runtime);
-        let context = std::rc::Rc::new(context);
+    use crate::{function::Function, module::Module};
 
-        for _ in 0..100 {
-            runtime.event_loop(
-                |ctx| {
-                    Box::pin(async move {
-                        let script = r#"
-async function main() {
-    return await test1();
-}
+    let runtime = runtime::Runtime::default();
+    let context = context::Context::from(&runtime);
 
-async function test1() {
-    return await test2();
-}
-
-async function test2() {
-    return await test3();
-}
-
-async function test3() {
-    return await test4();
-}
-
-async function test4() {
-    return "test4";
+    let script = r#"
+function main() {
+    let buffer = new ArrayBuffer(10);
+    let array = new Uint8Array(buffer);
+    for (var i = 0; i < array.length; i++) {
+        array[i] = i * 10;
+    }
+    return array;
 }
 
 main();
 "#;
 
-                        let value = ctx.eval_global(script, "main").unwrap();
-                        let value = promise::Promise::new(value).await.unwrap();
-                        println!("{}", value.to_string().unwrap());
-                    })
-                },
-                context.clone(),
-            );
-        }
+    let val = context.eval_global(script, "main").unwrap();
+    let mut buffer = val.property("buffer").unwrap();
+    let buffer = buffer.to_buffer_mut::<u8>().unwrap();
+    println!("{:?}", buffer);
+    buffer[0] = 42;
+
+    let script = r#"
+export function main(uint8) {
+    uint8[1] = 43;
+    return {
+        "data": uint8,
+        "array": [1, "2"]
+    };
+}
+"#;
+    let value = context.eval_module(script, "_main").unwrap();
+    let module = Module::new(value).unwrap();
+
+    let value = module.get("main").unwrap();
+    let function = Function::new(value).unwrap();
+
+    for _ in 0..10 {
+        let value = function.call(None, vec![val.clone()]).unwrap();
+        println!(
+            "{:?}",
+            value
+                .property("data")
+                .unwrap()
+                .property("buffer")
+                .unwrap()
+                .to_buffer::<u8>()
+                .unwrap()
+        );
+
+        let array = value.property("array").unwrap().to_array().unwrap();
+        println!("{}", array.first().unwrap().to_i32().unwrap());
+        println!("{}", array.get(1).unwrap().to_string().unwrap());
     }
 }

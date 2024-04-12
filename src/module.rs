@@ -3,10 +3,7 @@ use crate::{
     value::{Exception, JSValueRef},
 };
 use quickjs_sys as sys;
-use std::{
-    ffi::{c_char, CString},
-    mem::ManuallyDrop,
-};
+use std::ffi::{c_char, CString};
 
 extern "C" {
     pub(crate) fn JS_GetModuleExport_real(
@@ -22,9 +19,7 @@ pub struct Module {
 
 impl Module {
     pub fn new(value: JSValueRef) -> Result<Self, QuickError> {
-        let value_clone = ManuallyDrop::new(value.clone());
-
-        let _value = unsafe { sys::JS_EvalFunction(value.ctx, value_clone.val) };
+        let _value = unsafe { sys::JS_EvalFunction(value.ctx, value.clone().val()) };
         let _value = JSValueRef::from_js_value(value.ctx, _value);
 
         if _value.tag() == sys::JS_TAG_EXCEPTION {
