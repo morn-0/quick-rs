@@ -6,7 +6,7 @@ use std::{
     f64,
     ffi::{c_double, c_void, CString},
     mem::{self, ManuallyDrop, MaybeUninit},
-    ptr, slice,
+    slice,
 };
 
 extern "C" {
@@ -15,10 +15,10 @@ extern "C" {
     fn JS_VALUE_GET_INT_real(val: sys::JSValue) -> i32;
     fn JS_VALUE_GET_FLOAT64_real(val: sys::JSValue) -> f64;
     fn JS_VALUE_GET_PTR_real(v: sys::JSValue) -> *mut c_void;
-    fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
+    pub(crate) fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
     fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
     fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
-    fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
+    pub(crate) fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
 }
 
 pub trait Number {}
@@ -203,35 +203,4 @@ impl ToString for Exception {
 
         format!("{name} {message} {stack}")
     }
-}
-
-pub fn make_undefined() -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) }
-}
-
-pub fn make_bool(flag: bool) -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if flag { 1 } else { 0 }) }
-}
-
-pub fn make_null() -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) }
-}
-
-pub fn make_int(value: i32) -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) }
-}
-
-pub fn make_float(value: f64) -> sys::JSValue {
-    unsafe { JS_NewFloat64_real(ptr::null_mut(), value) }
-}
-
-pub fn make_string(ctx: *mut sys::JSContext, value: &str) -> Result<sys::JSValue, QuickError> {
-    let value = match CString::new(value) {
-        Ok(v) => v,
-        Err(e) => {
-            return Err(QuickError::CStringError(e.to_string()));
-        }
-    };
-
-    Ok(unsafe { sys::JS_NewString(ctx, value.as_ptr()) })
 }

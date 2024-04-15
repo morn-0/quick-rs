@@ -75,7 +75,7 @@ extern "C" fn module_loader(
     null_mut()
 }
 
-pub struct Runtime(pub *mut sys::JSRuntime);
+pub struct Runtime(pub(crate) *mut sys::JSRuntime);
 
 impl Runtime {
     pub fn new(loader: Option<Box<&mut dyn UserLoader>>) -> Self {
