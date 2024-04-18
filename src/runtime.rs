@@ -31,10 +31,6 @@ extern "C" fn module_loader(
     module_name: *const c_char,
     opaque: *mut c_void,
 ) -> *mut sys::JSModuleDef {
-    fn is_url(url: &str) -> bool {
-        url.starts_with("https://") || url.starts_with("http://")
-    }
-
     if !opaque.is_null() {
         let loader = unsafe { Box::from_raw(opaque as *mut &mut dyn UserLoader) };
         let loader = ManuallyDrop::new(loader);
@@ -48,13 +44,7 @@ extern "C" fn module_loader(
         .to_string_lossy()
         .to_string();
 
-    let src = if is_url(&module_name) {
-        if let Ok(request) = reqwest::blocking::get(&module_name) {
-            request.text().ok()
-        } else {
-            None
-        }
-    } else if Path::new(&module_name).exists() {
+    let src = if Path::new(&module_name).exists() {
         fs::read_to_string(&module_name).ok()
     } else {
         None

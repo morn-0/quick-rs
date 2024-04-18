@@ -25,7 +25,7 @@ JSValue JS_MKVAL_real(int tag, int val)
     return JS_MKVAL(tag, val);
 }
 
-JSValue JS_DupValue_real(JSContext *ctx, JSValue v)
+JSValue JS_DupValue_real(JSContext *ctx, JSValueConst v)
 {
     return JS_DupValue(ctx, v);
 }
@@ -40,7 +40,7 @@ JSValue JS_NewFloat64_real(JSContext *ctx, double d)
     return JS_NewFloat64(ctx, d);
 }
 
-int JS_IsArrayBuffer_real(JSValue val)
+JS_BOOL JS_IsArrayBuffer_real(JSValueConst val)
 {
     return JS_IsArrayBuffer(val);
 }

@@ -1,9 +1,11 @@
 use crate::{
+    context::Context,
     error::QuickError,
-    value::{self, Exception, JSValueRef},
+    value::{Exception, JSValueRef},
 };
 use anyhow::Result;
 use quickjs_sys as sys;
+use std::mem::ManuallyDrop;
 
 pub struct Function {
     value: JSValueRef,
@@ -19,9 +21,12 @@ impl Function {
         this: Option<JSValueRef>,
         args: Vec<JSValueRef>,
     ) -> Result<JSValueRef, QuickError> {
-        let this_raw = match this {
-            Some(ref v) => v.val,
-            None => value::make_undefined(),
+        let this_raw = match &this {
+            Some(v) => v.val,
+            None => {
+                let ctx = ManuallyDrop::new(Context(self.value.ctx));
+                ctx.make_undefined().val()
+            }
         };
         let args_raw: Vec<_> = args.iter().map(|arg| arg.val).collect();
 
@@ -35,10 +40,10 @@ impl Function {
             )
         };
 
-        let value = JSValueRef::from_js_value(self.value.ctx, value);
+        let value = JSValueRef::from_value(self.value.ctx, value);
         if value.is_exception() {
             let value = unsafe { sys::JS_GetException(self.value.ctx) };
-            let value = JSValueRef::from_js_value(self.value.ctx, value);
+            let value = JSValueRef::from_value(self.value.ctx, value);
 
             Err(QuickError::CallError(Exception(value).to_string()))
         } else {

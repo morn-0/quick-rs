@@ -7,12 +7,11 @@ pub mod module;
 pub mod runtime;
 pub mod value;
 
-#[test]
-fn test() {
-    use crate::{function::Function, module::Module};
+fn main() {
+    use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
 
-    let runtime = runtime::Runtime::default();
-    let context = context::Context::from(&runtime);
+    let runtime = Runtime::default();
+    let context = Context::from(&runtime);
 
     let script = r#"
 function main() {

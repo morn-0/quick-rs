@@ -4,7 +4,12 @@ use crate::{
     value::{Exception, JSValueRef},
 };
 use quickjs_sys as sys;
-use std::ffi::CString;
+use std::ffi::{c_double, CString};
+
+extern "C" {
+    fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
+    fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
+}
 
 pub struct Context(pub *mut sys::JSContext);
 
@@ -44,17 +49,54 @@ impl Context {
 
         unsafe {
             let value = sys::JS_Eval(self.0, c_src.as_ptr(), src.len(), c_name.as_ptr(), flags);
-            let value = JSValueRef::from_js_value(self.0, value);
+            let value = JSValueRef::from_value(self.0, value);
 
             if value.tag() == sys::JS_TAG_EXCEPTION {
                 let value = sys::JS_GetException(self.0);
-                let value = JSValueRef::from_js_value(self.0, value);
+                let value = JSValueRef::from_value(self.0, value);
 
                 Err(QuickError::EvalError(Exception(value).to_string()))
             } else {
                 Ok(value)
             }
         }
+    }
+
+    pub fn make_undefined(&self) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) };
+        JSValueRef::from_value(self.0, value)
+    }
+
+    pub fn make_bool(&self, flag: bool) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if flag { 1 } else { 0 }) };
+        JSValueRef::from_value(self.0, value)
+    }
+
+    pub fn make_null(&self) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) };
+        JSValueRef::from_value(self.0, value)
+    }
+
+    pub fn make_int(&self, value: i32) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) };
+        JSValueRef::from_value(self.0, value)
+    }
+
+    pub fn make_float(&self, value: f64) -> JSValueRef {
+        let value = unsafe { JS_NewFloat64_real(self.0, value) };
+        JSValueRef::from_value(self.0, value)
+    }
+
+    pub fn make_string(&self, value: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
+        let value = match CString::new(value.as_ref()) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(QuickError::CStringError(e.to_string()));
+            }
+        };
+        let value = unsafe { sys::JS_NewString(self.0, value.as_ptr()) };
+
+        Ok(JSValueRef::from_value(self.0, value))
     }
 }
 
