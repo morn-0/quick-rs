@@ -55,6 +55,14 @@ impl JSValueRef {
         Ok(JSValueRef::from_value(self.ctx, value))
     }
 
+    pub fn to_bool(&self) -> Result<bool, QuickError> {
+        if self.tag == sys::JS_TAG_BOOL {
+            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) } != 0)
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
+    }
+
     pub fn to_i32(&self) -> Result<i32, QuickError> {
         if self.tag == sys::JS_TAG_INT {
             Ok(unsafe { JS_VALUE_GET_INT_real(self.val) })
