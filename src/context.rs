@@ -4,7 +4,10 @@ use crate::{
     value::{Exception, JSValueRef},
 };
 use quickjs_sys as sys;
-use std::ffi::{c_double, CString};
+use std::{
+    ffi::{c_double, c_void, CString},
+    ptr::{self, slice_from_raw_parts_mut},
+};
 
 extern "C" {
     fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
@@ -96,6 +99,29 @@ impl Context {
         };
         let value = unsafe { sys::JS_NewString(self.0, value.as_ptr()) };
 
+        Ok(JSValueRef::from_value(self.0, value))
+    }
+
+    pub fn make_buffer(&self, value: Vec<u8>) -> Result<JSValueRef, QuickError> {
+        unsafe extern "C" fn free(_: *mut sys::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
+            let len = ptr::read::<usize>(opaque as *const usize);
+            let ptr = slice_from_raw_parts_mut(ptr as *mut u8, len);
+            drop(Box::from_raw(ptr));
+        }
+
+        let mut len = value.len();
+        let value = Box::into_raw(value.into_boxed_slice()) as *mut u8;
+
+        let value = unsafe {
+            sys::JS_NewArrayBuffer(
+                self.0,
+                value,
+                len,
+                Some(free),
+                ptr::addr_of_mut!(len) as *mut c_void,
+                0,
+            )
+        };
         Ok(JSValueRef::from_value(self.0, value))
     }
 }
