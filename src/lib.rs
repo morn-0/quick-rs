@@ -7,11 +7,13 @@ pub mod module;
 pub mod runtime;
 pub mod value;
 
+#[test]
 fn main() {
     use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
 
     let runtime = Runtime::default();
     let context = Context::from(&runtime);
+    let nb = context.make_buffer(vec![]).unwrap();
 
     let script = r#"
 function main() {
@@ -32,7 +34,7 @@ main();
     buffer[0] = 42;
 
     let script = r#"
-export function main(uint8) {
+export function main(uint8, buffer) {
     uint8[1] = 43;
     return {
         "data": uint8,
@@ -47,7 +49,7 @@ export function main(uint8) {
     let function = Function::new(value).unwrap();
 
     for _ in 0..10 {
-        let value = function.call(None, vec![val.clone()]).unwrap();
+        let value = function.call(None, vec![val.clone(), nb.clone()]).unwrap();
         println!(
             "{:?}",
             value

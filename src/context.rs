@@ -104,9 +104,11 @@ impl Context {
 
     pub fn make_buffer(&self, value: Vec<u8>) -> Result<JSValueRef, QuickError> {
         unsafe extern "C" fn free(_: *mut sys::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
-            let len = ptr::read::<usize>(opaque as *const usize);
-            let ptr = slice_from_raw_parts_mut(ptr as *mut u8, len);
-            drop(Box::from_raw(ptr));
+            if !opaque.is_null() {
+                let len = ptr::read::<usize>(opaque as *const usize);
+                let ptr = slice_from_raw_parts_mut(ptr as *mut u8, len);
+                drop(Box::from_raw(ptr));
+            }
         }
 
         let mut len = value.len();
@@ -118,7 +120,11 @@ impl Context {
                 value,
                 len,
                 Some(free),
-                ptr::addr_of_mut!(len) as *mut c_void,
+                if len == 0 {
+                    ptr::null_mut()
+                } else {
+                    ptr::addr_of_mut!(len)
+                } as *mut c_void,
                 0,
             )
         };
