@@ -47,8 +47,22 @@ impl JSValueRef {
         JSValueRef { ctx, tag, ptr, val }
     }
 
-    pub fn property(&self, prop: &str) -> Result<JSValueRef, QuickError> {
-        let prop = match CString::new(prop) {
+    pub fn set_property(&self, prop: impl AsRef<str>, value: JSValueRef) -> Result<(), QuickError> {
+        let prop = match CString::new(prop.as_ref()) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(QuickError::CStringError(e.to_string()));
+            }
+        };
+
+        unsafe {
+            sys::JS_SetPropertyStr(self.ctx, self.val, prop.as_ptr(), value.val());
+        }
+        Ok(())
+    }
+
+    pub fn property(&self, prop: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
+        let prop = match CString::new(prop.as_ref()) {
             Ok(v) => v,
             Err(e) => {
                 return Err(QuickError::CStringError(e.to_string()));
