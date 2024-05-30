@@ -1,4 +1,4 @@
-use crate::error::QuickError;
+use crate::{context::Context, error::QuickError};
 use anyhow::Result;
 use log::error;
 use quickjs_sys as sys;
@@ -158,6 +158,14 @@ impl JSValueRef {
         } else {
             Err(QuickError::UnsupportedTypeError(self.tag))
         }
+    }
+
+    pub fn to_json(&self) -> Result<String, QuickError> {
+        let ctx = ManuallyDrop::new(Context(self.ctx));
+        let undefined = ctx.make_undefined().val();
+
+        let value = unsafe { sys::JS_JSONStringify(self.ctx, self.val, undefined, undefined) };
+        JSValueRef::from_value(self.ctx, value).to_string()
     }
 
     #[inline(always)]
