@@ -3,10 +3,14 @@ name = "quickjs-sys"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+mimalloc = ["dep:libmimalloc-sys"]
+
 [dependencies]
 libmimalloc-sys = { version = "0.1", features = [
     "extended",
-], default-features = false }
+], default-features = false, optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.69", default-features = false }

@@ -31,6 +31,11 @@ fn main() {
     for patch in fs::read_dir(patch).unwrap() {
         let patch = patch.unwrap().path();
 
+        #[cfg(not(feature = "mimalloc"))]
+        if patch.ends_with("support-rust-malloc.patch") {
+            continue;
+        }
+
         Command::new("patch")
             .current_dir(&code_path)
             .arg("-i")

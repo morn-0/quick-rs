@@ -10,6 +10,10 @@ members = ["quickjs-sys"]
 name = "test"
 path = "src/lib.rs"
 
+[features]
+default = []
+mimalloc = ["quickjs-sys/mimalloc"]
+
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
 thiserror = { version = "1", default-features = false }

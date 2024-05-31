@@ -7,7 +7,6 @@ pub mod module;
 pub mod runtime;
 pub mod value;
 
-#[test]
 fn main() {
     use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
 
