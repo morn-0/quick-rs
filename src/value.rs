@@ -37,9 +37,6 @@ pub struct JSValueRef {
     ptr: *mut c_void,
 }
 
-unsafe impl Send for JSValueRef {}
-unsafe impl Sync for JSValueRef {}
-
 impl JSValueRef {
     pub fn from_value(ctx: *mut sys::JSContext, val: sys::JSValue) -> Self {
         let tag = unsafe { JS_VALUE_GET_TAG_real(val) };
