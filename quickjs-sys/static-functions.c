@@ -25,6 +25,11 @@ JSValue JS_MKVAL_real(int tag, int val)
     return JS_MKVAL(tag, val);
 }
 
+JSValue JS_MKPTR_real(int tag, void *ptr)
+{
+    return JS_MKPTR(tag, ptr);
+}
+
 JSValue JS_DupValue_real(JSContext *ctx, JSValueConst v)
 {
     return JS_DupValue(ctx, v);

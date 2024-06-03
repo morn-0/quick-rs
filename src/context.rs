@@ -11,6 +11,7 @@ use std::{
 
 extern "C" {
     fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
+    fn JS_MKPTR_real(tag: i32, ptr: *mut c_void) -> sys::JSValue;
     fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
 }
 
@@ -77,6 +78,12 @@ impl Context {
 
     pub fn make_null(&self) -> JSValueRef {
         let value = unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) };
+        JSValueRef::from_value(self.0, value)
+    }
+
+    /// # Safety
+    pub unsafe fn make_ptr(&self, ptr: *mut c_void) -> JSValueRef {
+        let value = unsafe { JS_MKPTR_real(sys::JS_TAG_NULL, ptr) };
         JSValueRef::from_value(self.0, value)
     }
 

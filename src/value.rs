@@ -85,6 +85,11 @@ impl JSValueRef {
         }
     }
 
+    /// # Safety
+    pub unsafe fn to_ptr(&self) -> Result<*mut c_void, QuickError> {
+        Ok(JS_VALUE_GET_PTR_real(self.val))
+    }
+
     pub fn to_f64(&self) -> Result<f64, QuickError> {
         if self.tag == sys::JS_TAG_FLOAT64 {
             Ok(unsafe { JS_VALUE_GET_FLOAT64_real(self.val) })
