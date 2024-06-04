@@ -1,7 +1,7 @@
 use crate::{
     function::Function,
     runtime::TASK_CHANNEL,
-    value::{self, Exception, JSValueRef},
+    value::{Exception, JSValueRef},
 };
 use anyhow::Result;
 use log::error;
@@ -10,7 +10,7 @@ use quickjs_sys as sys;
 use std::{
     ffi::c_int,
     future::Future,
-    mem::ManuallyDrop,
+    mem::{self, ManuallyDrop},
     pin::Pin,
     rc::Rc,
     slice,
@@ -56,7 +56,7 @@ impl Future for Promise {
 
                 #[rustfmt::skip]
                 let then = sys::JS_GetPropertyInternal(ctx, this, sys::JS_ATOM_then, this, 0);
-                let then = match Function::new(JSValueRef::from_js_value(ctx, then)) {
+                let then = match Function::new(JSValueRef::from_value(ctx, then)) {
                     Ok(v) => v,
                     Err(e) => {
                         return Poll::Ready(Err(e));
@@ -64,12 +64,12 @@ impl Future for Promise {
                 };
 
                 let resolve = sys::JS_NewCFunctionData(ctx, Some(resolve), 1, 0, 1, state as _);
-                let resolve = JSValueRef::from_js_value(ctx, resolve);
+                let resolve = JSValueRef::from_value(ctx, resolve);
 
                 let reject = sys::JS_NewCFunctionData(ctx, Some(reject), 1, 0, 1, state as _);
-                let reject = JSValueRef::from_js_value(ctx, reject);
+                let reject = JSValueRef::from_value(ctx, reject);
 
-                let this = JSValueRef::from_js_value(ctx, this);
+                let this = JSValueRef::from_value(ctx, this);
                 let value = match then.call(Some(this), vec![resolve, reject]) {
                     Ok(v) => v,
                     Err(e) => {
@@ -102,48 +102,55 @@ unsafe extern "C" fn resolve(
     _magic: c_int,
     data: *mut sys::JSValue,
 ) -> sys::JSValue {
+    let ctx = ManuallyDrop::new(crate::context::Context(ctx));
+
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
     let state = ManuallyDrop::new(state);
 
     let Some(state) = state.upgrade() else {
-        return value::make_undefined();
+        return ctx.make_undefined().val();
     };
     let mut state = state.lock();
 
     let args = slice::from_raw_parts(argv, argc as usize);
     let value = if !args.is_empty() {
-        value::JS_DupValue_real(ctx, args[0])
+        let value = JSValueRef::from_value(ctx.0, args[0]);
+        let value_clone = value.clone().val();
+        mem::forget(value);
+        value_clone
     } else {
-        value::make_undefined()
+        ctx.make_undefined().val()
     };
 
-    state.data = Some(JSValueRef::from_js_value(ctx, value));
+    state.data = Some(JSValueRef::from_value(ctx.0, value));
 
     if let Some(waker) = state.waker.take() {
         waker.wake();
     }
 
-    value::make_undefined()
+    ctx.make_undefined().val()
 }
 
 unsafe extern "C" fn reject(
-    _ctx: *mut sys::JSContext,
+    ctx: *mut sys::JSContext,
     _this: sys::JSValue,
     _argc: c_int,
     _argv: *mut sys::JSValue,
     _magic: c_int,
     data: *mut sys::JSValue,
 ) -> sys::JSValue {
+    let ctx = ManuallyDrop::new(crate::context::Context(ctx));
+
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
     let state = ManuallyDrop::new(state);
 
     let Some(state) = state.upgrade() else {
-        return value::make_undefined();
+        return ctx.make_undefined().val();
     };
 
     if let Some(waker) = state.lock().waker.take() {
         waker.wake();
     }
 
-    value::make_undefined()
+    ctx.make_undefined().val()
 }

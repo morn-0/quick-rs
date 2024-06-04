@@ -1,24 +1,23 @@
-use crate::error::QuickError;
+use crate::{context::Context, error::QuickError};
 use anyhow::Result;
 use log::error;
 use quickjs_sys as sys;
 use std::{
     f64,
-    ffi::{c_double, c_void, CString},
+    ffi::{c_void, CString},
+    fmt::{self, Display, Formatter},
     mem::{self, ManuallyDrop, MaybeUninit},
-    ptr, slice,
+    slice,
 };
 
 extern "C" {
-    fn JS_IsArrayBuffer_real(val: sys::JSValue) -> i32;
     fn JS_VALUE_GET_TAG_real(v: sys::JSValue) -> i32;
     fn JS_VALUE_GET_INT_real(val: sys::JSValue) -> i32;
     fn JS_VALUE_GET_FLOAT64_real(val: sys::JSValue) -> f64;
     fn JS_VALUE_GET_PTR_real(v: sys::JSValue) -> *mut c_void;
-    fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
-    pub(crate) fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
-    pub(crate) fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
-    fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
+    fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
+    fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
+    fn JS_IsArrayBuffer_real(val: sys::JSValue) -> i32;
 }
 
 pub trait Number {}
@@ -40,21 +39,43 @@ pub struct JSValueRef {
 }
 
 impl JSValueRef {
-    pub fn from_js_value(ctx: *mut sys::JSContext, val: sys::JSValue) -> Self {
+    pub fn from_value(ctx: *mut sys::JSContext, val: sys::JSValue) -> Self {
         let tag = unsafe { JS_VALUE_GET_TAG_real(val) };
         let ptr = unsafe { JS_VALUE_GET_PTR_real(val) };
         JSValueRef { ctx, tag, ptr, val }
     }
 
-    pub fn property(&self, prop: &str) -> Result<JSValueRef, QuickError> {
-        let prop = match CString::new(prop) {
+    pub fn set_property(&self, prop: impl AsRef<str>, value: JSValueRef) -> Result<(), QuickError> {
+        let prop = match CString::new(prop.as_ref()) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(QuickError::CStringError(e.to_string()));
+            }
+        };
+
+        unsafe {
+            sys::JS_SetPropertyStr(self.ctx, self.val, prop.as_ptr(), value.val());
+        }
+        Ok(())
+    }
+
+    pub fn property(&self, prop: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
+        let prop = match CString::new(prop.as_ref()) {
             Ok(v) => v,
             Err(e) => {
                 return Err(QuickError::CStringError(e.to_string()));
             }
         };
         let value = unsafe { sys::JS_GetPropertyStr(self.ctx, self.val, prop.as_ptr()) };
-        Ok(JSValueRef::from_js_value(self.ctx, value))
+        Ok(JSValueRef::from_value(self.ctx, value))
+    }
+
+    pub fn to_bool(&self) -> Result<bool, QuickError> {
+        if self.tag == sys::JS_TAG_BOOL {
+            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) } != 0)
+        } else {
+            Err(QuickError::UnsupportedTypeError(self.tag))
+        }
     }
 
     pub fn to_i32(&self) -> Result<i32, QuickError> {
@@ -63,6 +84,11 @@ impl JSValueRef {
         } else {
             Err(QuickError::UnsupportedTypeError(self.tag))
         }
+    }
+
+    /// # Safety
+    pub unsafe fn to_ptr(&self) -> Result<*mut c_void, QuickError> {
+        Ok(JS_VALUE_GET_PTR_real(self.val))
     }
 
     pub fn to_f64(&self) -> Result<f64, QuickError> {
@@ -102,7 +128,7 @@ impl JSValueRef {
         for i in 0..length {
             unsafe {
                 let value = sys::JS_GetPropertyUint32(self.ctx, self.val, i as u32);
-                array.push(JSValueRef::from_js_value(self.ctx, value));
+                array.push(JSValueRef::from_value(self.ctx, value));
             }
         }
 
@@ -137,6 +163,14 @@ impl JSValueRef {
         }
     }
 
+    pub fn to_json(&self) -> Result<String, QuickError> {
+        let ctx = ManuallyDrop::new(Context(self.ctx));
+        let undefined = ctx.make_undefined().val();
+
+        let value = unsafe { sys::JS_JSONStringify(self.ctx, self.val, undefined, undefined) };
+        JSValueRef::from_value(self.ctx, value).to_string()
+    }
+
     #[inline(always)]
     pub fn is_exception(&self) -> bool {
         self.tag == sys::JS_TAG_EXCEPTION
@@ -161,7 +195,7 @@ impl JSValueRef {
 impl Clone for JSValueRef {
     fn clone(&self) -> Self {
         let v = unsafe { JS_DupValue_real(self.ctx, self.val) };
-        Self::from_js_value(self.ctx, v)
+        Self::from_value(self.ctx, v)
     }
 }
 
@@ -175,8 +209,8 @@ impl Drop for JSValueRef {
 
 pub struct Exception(pub JSValueRef);
 
-impl ToString for Exception {
-    fn to_string(&self) -> String {
+impl Display for Exception {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let name = match self.0.property("name").and_then(|v| v.to_string()) {
             Ok(v) => v,
             Err(e) => {
@@ -201,41 +235,6 @@ impl ToString for Exception {
             }
         };
 
-        format!("{name} {message} {stack}")
+        write!(f, "({name}, {message}, {stack})")
     }
-}
-
-pub fn make_undefined() -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) }
-}
-
-pub fn make_bool(flag: bool) -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if flag { 1 } else { 0 }) }
-}
-
-pub fn make_null() -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) }
-}
-
-pub fn make_int(value: i32) -> sys::JSValue {
-    unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) }
-}
-
-pub fn make_float(value: f64) -> sys::JSValue {
-    unsafe { JS_NewFloat64_real(ptr::null_mut(), value) }
-}
-
-/// # Safety
-pub unsafe fn make_string(
-    ctx: *mut sys::JSContext,
-    value: &str,
-) -> Result<sys::JSValue, QuickError> {
-    let value = match CString::new(value) {
-        Ok(v) => v,
-        Err(e) => {
-            return Err(QuickError::CStringError(e.to_string()));
-        }
-    };
-
-    Ok(unsafe { sys::JS_NewString(ctx, value.as_ptr()) })
 }
