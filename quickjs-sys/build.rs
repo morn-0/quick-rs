@@ -58,7 +58,6 @@ fn main() {
     cc::Build::new()
         .files(sources.iter().map(|f| code_path.join(f)))
         .define("_GNU_SOURCE", None)
-        .define("CONFIG_BIGNUM", None)
         .define("CONFIG_MODULE_EXPORT", None)
         .std("c11")
         .flag_if_supported("-Werror")

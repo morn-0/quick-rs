@@ -7,7 +7,6 @@ pub mod module;
 pub mod runtime;
 pub mod value;
 
-#[test]
 fn main() {
     use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
 
@@ -48,11 +47,15 @@ export function main(uint8, buffer, text) {
     let value = module.get("main").unwrap();
     let function = Function::new(value).unwrap();
 
-    for _ in 0..10 {
+    loop {
         let value = function
             .call(
                 None,
-                vec![val.clone(), nb.clone(), context.make_string("举头望明月，低头思故乡。").unwrap()],
+                vec![
+                    val.clone(),
+                    nb.clone(),
+                    context.make_string("举头望明月，低头思故乡。").unwrap(),
+                ],
             )
             .unwrap();
         println!("{}", value.to_json().unwrap());
