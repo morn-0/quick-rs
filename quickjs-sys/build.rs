@@ -46,7 +46,6 @@ fn main() {
             .unwrap();
     }
 
-    let quickjs_version = fs::read_to_string(code_path.join("VERSION")).unwrap();
     let sources = [
         "cutils.c",
         "libbf.c",
@@ -59,27 +58,19 @@ fn main() {
     cc::Build::new()
         .files(sources.iter().map(|f| code_path.join(f)))
         .define("_GNU_SOURCE", None)
-        .define(
-            "CONFIG_VERSION",
-            format!("\"{}\"", quickjs_version.trim()).as_str(),
-        )
         .define("CONFIG_BIGNUM", None)
         .define("CONFIG_MODULE_EXPORT", None)
         .std("c11")
-        .flag_if_supported("-Wchar-subscripts")
+        .flag_if_supported("-Werror")
+        .flag_if_supported("-Wextra")
+        .flag_if_supported("-Wno-implicit-fallthrough")
+        .flag_if_supported("-Wno-sign-compare")
+        .flag_if_supported("-Wno-missing-field-initializers")
+        .flag_if_supported("-Wno-unused-parameter")
+        .flag_if_supported("-Wno-unused-variable")
+        .flag_if_supported("-Wno-unused-but-set-variable")
         .flag_if_supported("-Wno-array-bounds")
         .flag_if_supported("-Wno-format-truncation")
-        .flag_if_supported("-Wno-missing-field-initializers")
-        .flag_if_supported("-Wno-sign-compare")
-        .flag_if_supported("-Wno-unused-parameter")
-        .flag_if_supported("-Wundef")
-        .flag_if_supported("-Wuninitialized")
-        .flag_if_supported("-Wunused")
-        .flag_if_supported("-Wwrite-strings")
-        .flag_if_supported("-Wno-cast-function-type")
-        .flag_if_supported("-Wno-implicit-fallthrough")
-        .flag_if_supported("-Wno-enum-conversion")
-        .flag_if_supported("-Wunknown-pragmas")
         .flag_if_supported("-funsigned-char")
         .opt_level(2)
         .compile(LIB_NAME);

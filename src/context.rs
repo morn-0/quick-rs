@@ -23,10 +23,6 @@ impl From<&Runtime> for Context {
             let ctx = sys::JS_NewContext(value.0);
 
             sys::JS_AddIntrinsicRegExpCompiler(ctx);
-            sys::JS_AddIntrinsicBigFloat(ctx);
-            sys::JS_AddIntrinsicBigDecimal(ctx);
-            sys::JS_AddIntrinsicOperators(ctx);
-            sys::JS_EnableBignumExt(ctx, 1);
 
             ctx
         };
@@ -104,7 +100,9 @@ impl Context {
                 return Err(QuickError::CStringError(e.to_string()));
             }
         };
-        let value = unsafe { sys::JS_NewString(self.0, value.as_ptr()) };
+        let value = unsafe {
+            sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes_with_nul().len())
+        };
 
         Ok(JSValueRef::from_value(self.0, value))
     }

@@ -1,8 +1,8 @@
 diff --git a/quickjs.c b/quickjs.c
-index 5098719..04c9941 100644
+index 978ade3..d9f670f 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -27258,6 +27258,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
+@@ -25909,6 +25909,39 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
      rt->module_loader_opaque = opaque;
  }
  
@@ -39,25 +39,23 @@ index 5098719..04c9941 100644
 +}
 +#endif
 +
-+
  /* default module filename normalizer */
  static char *js_default_module_normalize_name(JSContext *ctx,
                                                const char *base_name,
 diff --git a/quickjs.h b/quickjs.h
-index c482686..3d6e8c9 100644
+index 339d85d..90a8924 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -1040,6 +1040,14 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
- int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
-                            const JSCFunctionListEntry *tab, int len);
- 
+@@ -1005,6 +1005,12 @@ JS_EXTERN int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *exp
+                                  JSValue val);
+ JS_EXTERN int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
+                                      const JSCFunctionListEntry *tab, int len);
 +#ifdef CONFIG_MODULE_EXPORT
 +JSValueConst JS_GetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name);
 +int JS_GetModuleExportEntriesCount(JSModuleDef *m);
 +JSValue JS_GetModuleExportEntry(JSContext *ctx, JSModuleDef *m, int idx);
 +JSAtom JS_GetModuleExportEntryName(JSContext *ctx, JSModuleDef *m, int idx);
 +#endif
-+
-+
- #undef js_unlikely
- #undef js_force_inline
+ 
+ /* Version */
+ 
