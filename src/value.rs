@@ -149,7 +149,7 @@ impl JSValueRef {
     }
 
     pub fn to_buffer_mut<T: Number>(&mut self) -> Result<&mut [T], QuickError> {
-        if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
+        if unsafe { sys::JS_IsArrayBuffer(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
 
             let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx, size.as_mut_ptr(), self.val) };

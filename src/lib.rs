@@ -34,11 +34,11 @@ main();
     buffer[0] = 42;
 
     let script = r#"
-export function main(uint8, buffer) {
+export function main(uint8, buffer, text) {
     uint8[1] = 43;
     return {
         "data": uint8,
-        "array": [1, "2"]
+        "array": [1, "2", text]
     };
 }
 "#;
@@ -49,7 +49,13 @@ export function main(uint8, buffer) {
     let function = Function::new(value).unwrap();
 
     for _ in 0..10 {
-        let value = function.call(None, vec![val.clone(), nb.clone()]).unwrap();
+        let value = function
+            .call(
+                None,
+                vec![val.clone(), nb.clone(), context.make_string("举头望明月，低头思故乡。").unwrap()],
+            )
+            .unwrap();
+        println!("{}", value.to_json().unwrap());
         println!(
             "{:?}",
             value

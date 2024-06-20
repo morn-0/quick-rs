@@ -100,9 +100,7 @@ impl Context {
                 return Err(QuickError::CStringError(e.to_string()));
             }
         };
-        let value = unsafe {
-            sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes_with_nul().len())
-        };
+        let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
 
         Ok(JSValueRef::from_value(self.0, value))
     }
