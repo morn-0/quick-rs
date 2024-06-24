@@ -3,10 +3,13 @@ use crate::{
     runtime::Runtime,
     value::{Exception, JSValueRef},
 };
+use log::error;
 use quickjs_sys as sys;
 use std::{
-    ffi::{c_double, c_void, CString},
+    ffi::{c_double, c_int, c_void, CString},
+    mem::ManuallyDrop,
     ptr::{self, slice_from_raw_parts_mut},
+    slice,
 };
 
 extern "C" {
@@ -105,7 +108,7 @@ impl Context {
         Ok(JSValueRef::from_value(self.0, value))
     }
 
-    pub fn make_buffer(&self, value: Vec<u8>) -> Result<JSValueRef, QuickError> {
+    pub fn make_buffer(&self, value: impl AsRef<[u8]>) -> Result<JSValueRef, QuickError> {
         unsafe extern "C" fn free(_: *mut sys::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
             if !opaque.is_null() {
                 let len = ptr::read::<usize>(opaque as *const usize);
@@ -114,24 +117,77 @@ impl Context {
             }
         }
 
-        let mut len = value.len();
-        let value = Box::into_raw(value.into_boxed_slice()) as *mut u8;
+        let value = value.as_ref();
 
-        let value = unsafe {
-            sys::JS_NewArrayBuffer(
-                self.0,
-                value,
-                len,
-                Some(free),
-                if len == 0 {
-                    ptr::null_mut()
-                } else {
-                    ptr::addr_of_mut!(len)
-                } as *mut c_void,
-                0,
-            )
-        };
+        let mut len = value.len();
+        let opaque = if len == 0 {
+            ptr::null_mut()
+        } else {
+            ptr::addr_of_mut!(len)
+        } as *mut c_void;
+
+        let value = Box::into_raw(value.to_owned().into_boxed_slice()) as *mut u8;
+        let value = unsafe { sys::JS_NewArrayBuffer(self.0, value, len, Some(free), opaque, 0) };
         Ok(JSValueRef::from_value(self.0, value))
+    }
+
+    pub fn make_function<F>(
+        &self,
+        this: Option<JSValueRef>,
+        name: impl AsRef<str>,
+        args: i32,
+        value: F,
+    ) where
+        F: Fn(ManuallyDrop<Context>, Vec<ManuallyDrop<JSValueRef>>) -> JSValueRef,
+    {
+        unsafe extern "C" fn inner<F>(
+            ctx: *mut sys::JSContext,
+            _: sys::JSValue,
+            argc: c_int,
+            argv: *mut sys::JSValue,
+            _: c_int,
+            func: *mut sys::JSValue,
+        ) -> sys::JSValue
+        where
+            F: Fn(ManuallyDrop<Context>, Vec<ManuallyDrop<JSValueRef>>) -> JSValueRef,
+        {
+            let func = ManuallyDrop::new(JSValueRef::from_value(ctx, *func));
+            let ptr = match func.to_ptr() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("{e}");
+                    return ManuallyDrop::new(Context(ctx)).make_null().val();
+                }
+            };
+            let closure = &mut *(ptr as *mut F);
+
+            let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
+            let args: Vec<ManuallyDrop<JSValueRef>> = args
+                .into_iter()
+                .map(|v| JSValueRef::from_value(ctx, *v))
+                .map(ManuallyDrop::new)
+                .collect();
+
+            closure(ManuallyDrop::new(Context(ctx)), args).val()
+        }
+
+        let name = format!("{}\0", name.as_ref());
+
+        let data = Box::into_raw(Box::new(value));
+        let data = unsafe { self.make_ptr(data as *mut c_void) }.val();
+        let data = (&data) as *const sys::JSValue as *mut sys::JSValue;
+
+        unsafe {
+            let func = sys::JS_NewCFunctionData(self.0, Some(inner::<F>), args, 0, 1, data);
+
+            let this = match this {
+                Some(v) => v.val(),
+                None => sys::JS_GetGlobalObject(self.0),
+            };
+            sys::JS_SetPropertyStr(self.0, this, name.as_ptr() as _, func);
+
+            drop(JSValueRef::from_value(self.0, this));
+        }
     }
 }
 

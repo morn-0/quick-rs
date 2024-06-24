@@ -44,16 +44,16 @@ extern "C" fn module_loader(
         .to_string_lossy()
         .to_string();
 
-    let src = if Path::new(&module_name).exists() {
+    let source = if Path::new(&module_name).exists() {
         fs::read_to_string(&module_name).ok()
     } else {
         None
     };
 
-    if let Some(src) = src {
+    if let Some(source) = source {
         let ctx = ManuallyDrop::new(Context(ctx));
 
-        return match ctx.eval_module(src.as_str(), module_name.as_str()) {
+        return match ctx.eval_module(source.as_str(), module_name.as_str()) {
             Ok(value) => value.ptr() as *mut sys::JSModuleDef,
             Err(e) => {
                 error!("{e}");
@@ -78,9 +78,9 @@ impl Runtime {
             let heap_size = 1024 * 1024 * 32;
             sys::JS_SetMemoryLimit(rt, heap_size);
             #[cfg(target_pointer_width = "32")]
-            let stack_size = 1024 * 1024 * 8;
+            let stack_size = 1024 * 1024;
             #[cfg(target_pointer_width = "64")]
-            let stack_size = 1024 * 1024 * 16;
+            let stack_size = 1024 * 1024 * 2;
             sys::JS_SetMaxStackSize(rt, stack_size);
 
             let opaque = match loader {

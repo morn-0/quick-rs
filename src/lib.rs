@@ -12,7 +12,7 @@ fn main() {
 
     let runtime = Runtime::default();
     let context = Context::from(&runtime);
-    let nb = context.make_buffer(vec![]).unwrap();
+    let nb = context.make_buffer(vec![1, 2, 3]).unwrap();
 
     let script = r#"
 function main() {
@@ -32,12 +32,33 @@ main();
     println!("{:?}", buffer);
     buffer[0] = 42;
 
+    context.make_function(None, "fibonacci", 2, |ctx, args| {
+        fn fibonacci(n: u32) -> u64 {
+            if n == 0 {
+                return 0;
+            } else if n == 1 {
+                return 1;
+            } else {
+                return fibonacci(n - 1) + fibonacci(n - 2);
+            }
+        }
+
+        let v = fibonacci(args[0].to_i32().unwrap() as u32) as i32;
+        let string = args[1].to_string().unwrap();
+        drop(string);
+
+        println!("{v}");
+        ctx.make_int(v)
+    });
+
     let script = r#"
 export function main(uint8, buffer, text) {
     uint8[1] = 43;
+
     return {
         "data": uint8,
-        "array": [1, "2", text]
+        "array": [fibonacci(30, text), 1, "2", text],
+        "buffer": buffer
     };
 }
 "#;
@@ -48,30 +69,25 @@ export function main(uint8, buffer, text) {
     let function = Function::new(value).unwrap();
 
     loop {
+        let now = std::time::Instant::now();
         let value = function
             .call(
                 None,
                 vec![
                     val.clone(),
                     nb.clone(),
-                    context.make_string("举头望明月，低头思故乡。").unwrap(),
+                    context
+                        .make_string(include_str!(
+                            "/Users/morning/Downloads/quick-rs/randomfile.txt"
+                        ))
+                        .unwrap(),
                 ],
             )
             .unwrap();
-        println!("{}", value.to_json().unwrap());
         println!(
-            "{:?}",
-            value
-                .property("data")
-                .unwrap()
-                .property("buffer")
-                .unwrap()
-                .to_buffer::<u8>()
-                .unwrap()
+            "{}ms, {}",
+            now.elapsed().as_millis(),
+            value.to_json().unwrap().len()
         );
-
-        let array = value.property("array").unwrap().to_array().unwrap();
-        println!("{}", array.first().unwrap().to_i32().unwrap());
-        println!("{}", array.get(1).unwrap().to_string().unwrap());
     }
 }
