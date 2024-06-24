@@ -78,9 +78,9 @@ impl Runtime {
             let heap_size = 1024 * 1024 * 32;
             sys::JS_SetMemoryLimit(rt, heap_size);
             #[cfg(target_pointer_width = "32")]
-            let stack_size = 1024 * 1024;
+            let stack_size = 1024 * 1024 * 8;
             #[cfg(target_pointer_width = "64")]
-            let stack_size = 1024 * 1024 * 2;
+            let stack_size = 1024 * 1024 * 16;
             sys::JS_SetMaxStackSize(rt, stack_size);
 
             let opaque = match loader {
