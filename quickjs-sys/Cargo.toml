@@ -6,10 +6,23 @@ edition = "2021"
 [features]
 default = []
 mimalloc = ["dep:libmimalloc-sys"]
+jemalloc = ["dep:jemalloc-sys"]
+snmalloc = ["dep:snmalloc-sys"]
 
 [dependencies]
 libmimalloc-sys = { version = "0.1", features = [
     "extended",
+], default-features = false, optional = true }
+jemalloc-sys = { version = "0.5", features = [
+    "background_threads_runtime_support",
+    "background_threads",
+], default-features = false, optional = true }
+snmalloc-sys = { version = "0.3", features = [
+    "native-cpu",
+    "build_cc",
+    "usecxx17",
+    "win8compat",
+    "lto",
 ], default-features = false, optional = true }
 
 [build-dependencies]

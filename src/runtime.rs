@@ -28,24 +28,24 @@ extern "C" fn module_normalize(
 
 extern "C" fn module_loader(
     ctx: *mut sys::JSContext,
-    module_name: *const c_char,
+    module: *const c_char,
     opaque: *mut c_void,
 ) -> *mut sys::JSModuleDef {
     if !opaque.is_null() {
         let loader = unsafe { Box::from_raw(opaque as *mut &mut dyn UserLoader) };
         let loader = ManuallyDrop::new(loader);
 
-        if let Some(module) = loader.load(ctx, module_name) {
+        if let Some(module) = loader.load(ctx, module) {
             return module;
         }
     }
 
-    let module_name = unsafe { CStr::from_ptr(module_name) }
+    let module = unsafe { CStr::from_ptr(module) }
         .to_string_lossy()
         .to_string();
 
-    let source = if Path::new(&module_name).exists() {
-        fs::read_to_string(&module_name).ok()
+    let source = if Path::new(&module).exists() {
+        fs::read_to_string(&module).ok()
     } else {
         None
     };
@@ -53,7 +53,7 @@ extern "C" fn module_loader(
     if let Some(source) = source {
         let ctx = ManuallyDrop::new(Context(ctx));
 
-        return match ctx.eval_module(source.as_str(), module_name.as_str()) {
+        return match ctx.eval_module(source.as_str(), module.as_str()) {
             Ok(value) => value.ptr() as *mut sys::JSModuleDef,
             Err(e) => {
                 error!("{e}");
@@ -68,20 +68,17 @@ extern "C" fn module_loader(
 pub struct Runtime(pub *mut sys::JSRuntime);
 
 impl Runtime {
-    pub fn new(loader: Option<Box<&mut dyn UserLoader>>) -> Self {
+    pub fn new(heap: usize, stack: usize, loader: Option<Box<&mut dyn UserLoader>>) -> Self {
         let rt = unsafe {
             let rt = sys::JS_NewRuntime();
 
-            #[cfg(target_pointer_width = "32")]
-            let heap_size = 1024 * 1024 * 16;
-            #[cfg(target_pointer_width = "64")]
-            let heap_size = 1024 * 1024 * 32;
-            sys::JS_SetMemoryLimit(rt, heap_size);
-            #[cfg(target_pointer_width = "32")]
-            let stack_size = 1024 * 1024;
-            #[cfg(target_pointer_width = "64")]
-            let stack_size = 1024 * 1024 * 2;
-            sys::JS_SetMaxStackSize(rt, stack_size);
+            if heap != 0 {
+                sys::JS_SetMemoryLimit(rt, heap);
+            }
+
+            if stack != 0 {
+                sys::JS_SetMaxStackSize(rt, stack);
+            }
 
             let opaque = match loader {
                 Some(loader) => Box::into_raw(loader) as _,
@@ -104,7 +101,7 @@ impl Runtime {
 
 impl Default for Runtime {
     fn default() -> Self {
-        Self::new(None)
+        Self::new(0, 0, None)
     }
 }
 

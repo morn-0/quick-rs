@@ -16,7 +16,6 @@ extern "C" {
     fn JS_VALUE_GET_PTR_real(v: sys::JSValue) -> *mut c_void;
     fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
     fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
-    fn JS_IsArrayBuffer_real(val: sys::JSValue) -> i32;
 }
 
 pub trait Number {}
@@ -135,7 +134,7 @@ impl JSValueRef {
     }
 
     pub fn to_buffer<T: Number>(&self) -> Result<&[T], QuickError> {
-        if unsafe { JS_IsArrayBuffer_real(self.val) == 1 } {
+        if unsafe { sys::JS_IsArrayBuffer(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
 
             let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx, size.as_mut_ptr(), self.val) };

@@ -36,23 +36,43 @@ impl From<&Runtime> for Context {
 }
 
 impl Context {
-    pub fn eval_module(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
+    pub fn eval_module(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<JSValueRef, QuickError> {
         const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY) as i32;
-        self.eval(src, name, FLAGS)
+        self.eval(source, name, FLAGS)
     }
 
-    pub fn eval_global(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
-        self.eval(src, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
+    pub fn eval_global(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<JSValueRef, QuickError> {
+        self.eval(source, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
-    pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, QuickError> {
-        let (c_src, c_name) = match (CString::new(src), CString::new(name)) {
-            (Ok(c_src), Ok(c_name)) => (c_src, c_name),
-            _ => return Err(QuickError::CStringError(src.to_string())),
+    pub fn eval(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+        flags: i32,
+    ) -> Result<JSValueRef, QuickError> {
+        let (c_source, c_name) = match (CString::new(source.as_ref()), CString::new(name.as_ref()))
+        {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => return Err(QuickError::CStringError(source.as_ref().to_string())),
         };
 
         unsafe {
-            let value = sys::JS_Eval(self.0, c_src.as_ptr(), src.len(), c_name.as_ptr(), flags);
+            let value = sys::JS_Eval(
+                self.0,
+                c_source.as_ptr(),
+                source.as_ref().len() - 1,
+                c_name.as_ptr(),
+                flags,
+            );
             let value = JSValueRef::from_value(self.0, value);
 
             if value.tag() == sys::JS_TAG_EXCEPTION {
@@ -114,15 +134,17 @@ impl Context {
         T: Serialize,
     {
         let json = serde_json::to_string(&value)?;
-        let mut json = json.into_bytes();
-        json.push(0);
+
+        let mut buf = json.into_bytes();
+        let len = buf.len();
+        buf.push(0);
 
         let json = unsafe {
             sys::JS_ParseJSON(
                 self.0,
-                json.as_ptr() as *const _,
-                json.len() - 1,
-                "<input>\0".as_ptr() as *const _,
+                buf.as_ptr() as *const _,
+                len,
+                b"<input>\0".as_ptr() as *const _,
             )
         };
 

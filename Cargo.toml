@@ -13,6 +13,8 @@ path = "src/lib.rs"
 [features]
 default = []
 mimalloc = ["quickjs-sys/mimalloc"]
+jemalloc = ["quickjs-sys/jemalloc"]
+snmalloc = ["quickjs-sys/snmalloc"]
 
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
