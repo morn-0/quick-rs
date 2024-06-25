@@ -76,11 +76,7 @@ export function main(uint8, buffer, text) {
                 vec![
                     val.clone(),
                     nb.clone(),
-                    context
-                        .make_string(include_str!(
-                            "/Users/morning/Downloads/quick-rs/randomfile.txt"
-                        ))
-                        .unwrap(),
+                    context.make_string("test").unwrap(),
                 ],
             )
             .unwrap();

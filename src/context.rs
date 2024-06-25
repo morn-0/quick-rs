@@ -5,6 +5,7 @@ use crate::{
 };
 use log::error;
 use quickjs_sys as sys;
+use serde::Serialize;
 use std::{
     ffi::{c_double, c_int, c_void, CString},
     mem::ManuallyDrop,
@@ -106,6 +107,26 @@ impl Context {
         let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
 
         Ok(JSValueRef::from_value(self.0, value))
+    }
+
+    pub fn make_json<T>(&self, value: T) -> anyhow::Result<JSValueRef>
+    where
+        T: Serialize,
+    {
+        let json = serde_json::to_string(&value)?;
+        let mut json = json.into_bytes();
+        json.push(0);
+
+        let json = unsafe {
+            sys::JS_ParseJSON(
+                self.0,
+                json.as_ptr() as *const _,
+                json.len() - 1,
+                "<input>\0".as_ptr() as *const _,
+            )
+        };
+
+        Ok(JSValueRef::from_value(self.0, json))
     }
 
     pub fn make_buffer(&self, value: impl AsRef<[u8]>) -> Result<JSValueRef, QuickError> {
