@@ -86,6 +86,11 @@ impl Context {
         }
     }
 
+    pub fn make_object(&self) -> JSValueRef {
+        let value = unsafe { sys::JS_NewObject(self.0) };
+        JSValueRef::from_value(self.0, value)
+    }
+
     pub fn make_undefined(&self) -> JSValueRef {
         let value = unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) };
         JSValueRef::from_value(self.0, value)

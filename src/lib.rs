@@ -12,6 +12,7 @@ fn main() {
 
     let runtime = Runtime::default();
     let context = Context::from(&runtime);
+
     let nb = context.make_buffer(vec![1, 2, 3]).unwrap();
 
     let script = r#"
