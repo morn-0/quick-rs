@@ -12,6 +12,7 @@ fn main() {
 
     let binding = bindgen::builder()
         .header(header)
+        .opaque_type("JSValue")
         .allowlist_function("(__)?(JS|js)_.*")
         .allowlist_var("JS_.*")
         .allowlist_type("JS.*")

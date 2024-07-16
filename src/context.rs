@@ -5,6 +5,7 @@ use crate::{
 };
 use log::error;
 use quickjs_sys as sys;
+#[cfg(feature = "json")]
 use serde::Serialize;
 use std::{
     ffi::{c_double, c_int, c_void, CString},
@@ -134,6 +135,7 @@ impl Context {
         Ok(JSValueRef::from_value(self.0, value))
     }
 
+    #[cfg(feature = "json")]
     pub fn make_json<T>(&self, value: T) -> anyhow::Result<JSValueRef>
     where
         T: Serialize,
@@ -186,7 +188,7 @@ impl Context {
         args: i32,
         value: F,
     ) where
-        F: Fn(ManuallyDrop<Context>, Vec<ManuallyDrop<JSValueRef>>) -> JSValueRef,
+        F: Fn(&Context, &[JSValueRef]) -> JSValueRef,
     {
         unsafe extern "C" fn inner<F>(
             ctx: *mut sys::JSContext,
@@ -197,7 +199,7 @@ impl Context {
             func: *mut sys::JSValue,
         ) -> sys::JSValue
         where
-            F: Fn(ManuallyDrop<Context>, Vec<ManuallyDrop<JSValueRef>>) -> JSValueRef,
+            F: Fn(&Context, &[JSValueRef]) -> JSValueRef,
         {
             let func = ManuallyDrop::new(JSValueRef::from_value(ctx, *func));
             let ptr = match func.to_ptr() {
@@ -209,14 +211,21 @@ impl Context {
             };
             let closure = &mut *(ptr as *mut F);
 
+            let ctx = Context(ctx);
             let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
-            let args: Vec<ManuallyDrop<JSValueRef>> = args
+            let args: Vec<JSValueRef> = args
                 .into_iter()
-                .map(|v| JSValueRef::from_value(ctx, *v))
-                .map(ManuallyDrop::new)
+                .map(|v| JSValueRef::from_value(ctx.0, *v))
                 .collect();
 
-            closure(ManuallyDrop::new(Context(ctx)), args).val()
+            let val = closure(&ctx, &args).val();
+
+            std::mem::forget(ctx);
+            args.into_iter().for_each(|v| {
+                v.val();
+            });
+
+            val
         }
 
         let name = format!("{}\0", name.as_ref());
