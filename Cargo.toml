@@ -6,21 +6,25 @@ edition = "2021"
 [workspace]
 members = ["quickjs-sys"]
 
-[features]
-default = ["compio", "flume", "futures-util"]
-mimalloc = ["quickjs-sys/mimalloc"]
-
 [[bin]]
 name = "test"
 path = "src/lib.rs"
 
+[features]
+default = ["compio", "flume", "futures-util"]
+mimalloc = ["quickjs-sys/mimalloc"]
+jemalloc = ["quickjs-sys/jemalloc"]
+snmalloc = ["quickjs-sys/snmalloc"]
+
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
 thiserror = { version = "1", default-features = false }
-anyhow = { version = "1", default-features = false }
+anyhow = { version = "1", features = ["std"], default-features = false }
 log = { version = "0.4", default-features = false }
+serde = { version = "1", features = ["derive"], default-features = false }
+serde_json = { version = "1", features = ["std"], default-features = false }
 parking_lot = { version = "0.12", default-features = false }
-compio = { version = "0.10", features = [
+compio = { version = "0.11", features = [
     "runtime",
     "io-uring",
     "time",

@@ -3,10 +3,14 @@ use crate::{
     runtime::Runtime,
     value::{Exception, JSValueRef},
 };
+use log::error;
 use quickjs_sys as sys;
+use serde::Serialize;
 use std::{
-    ffi::{c_double, c_void, CString},
+    ffi::{c_double, c_int, c_void, CString},
+    mem::ManuallyDrop,
     ptr::{self, slice_from_raw_parts_mut},
+    slice,
 };
 
 extern "C" {
@@ -23,10 +27,6 @@ impl From<&Runtime> for Context {
             let ctx = sys::JS_NewContext(value.0);
 
             sys::JS_AddIntrinsicRegExpCompiler(ctx);
-            sys::JS_AddIntrinsicBigFloat(ctx);
-            sys::JS_AddIntrinsicBigDecimal(ctx);
-            sys::JS_AddIntrinsicOperators(ctx);
-            sys::JS_EnableBignumExt(ctx, 1);
 
             ctx
         };
@@ -36,23 +36,43 @@ impl From<&Runtime> for Context {
 }
 
 impl Context {
-    pub fn eval_module(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
+    pub fn eval_module(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<JSValueRef, QuickError> {
         const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY) as i32;
-        self.eval(src, name, FLAGS)
+        self.eval(source, name, FLAGS)
     }
 
-    pub fn eval_global(&self, src: &str, name: &str) -> Result<JSValueRef, QuickError> {
-        self.eval(src, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
+    pub fn eval_global(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<JSValueRef, QuickError> {
+        self.eval(source, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
-    pub fn eval(&self, src: &str, name: &str, flags: i32) -> Result<JSValueRef, QuickError> {
-        let (c_src, c_name) = match (CString::new(src), CString::new(name)) {
-            (Ok(c_src), Ok(c_name)) => (c_src, c_name),
-            _ => return Err(QuickError::CStringError(src.to_string())),
+    pub fn eval(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+        flags: i32,
+    ) -> Result<JSValueRef, QuickError> {
+        let (c_source, c_name) = match (CString::new(source.as_ref()), CString::new(name.as_ref()))
+        {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => return Err(QuickError::CStringError(source.as_ref().to_string())),
         };
 
         unsafe {
-            let value = sys::JS_Eval(self.0, c_src.as_ptr(), src.len(), c_name.as_ptr(), flags);
+            let value = sys::JS_Eval(
+                self.0,
+                c_source.as_ptr(),
+                source.as_ref().len() - 1,
+                c_name.as_ptr(),
+                flags,
+            );
             let value = JSValueRef::from_value(self.0, value);
 
             if value.tag() == sys::JS_TAG_EXCEPTION {
@@ -64,6 +84,11 @@ impl Context {
                 Ok(value)
             }
         }
+    }
+
+    pub fn make_object(&self) -> JSValueRef {
+        let value = unsafe { sys::JS_NewObject(self.0) };
+        JSValueRef::from_value(self.0, value)
     }
 
     pub fn make_undefined(&self) -> JSValueRef {
@@ -104,12 +129,34 @@ impl Context {
                 return Err(QuickError::CStringError(e.to_string()));
             }
         };
-        let value = unsafe { sys::JS_NewString(self.0, value.as_ptr()) };
+        let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
 
         Ok(JSValueRef::from_value(self.0, value))
     }
 
-    pub fn make_buffer(&self, value: Vec<u8>) -> Result<JSValueRef, QuickError> {
+    pub fn make_json<T>(&self, value: T) -> anyhow::Result<JSValueRef>
+    where
+        T: Serialize,
+    {
+        let json = serde_json::to_string(&value)?;
+
+        let mut buf = json.into_bytes();
+        let len = buf.len();
+        buf.push(0);
+
+        let json = unsafe {
+            sys::JS_ParseJSON(
+                self.0,
+                buf.as_ptr() as *const _,
+                len,
+                b"<input>\0".as_ptr() as *const _,
+            )
+        };
+
+        Ok(JSValueRef::from_value(self.0, json))
+    }
+
+    pub fn make_buffer(&self, value: impl AsRef<[u8]>) -> Result<JSValueRef, QuickError> {
         unsafe extern "C" fn free(_: *mut sys::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
             if !opaque.is_null() {
                 let len = ptr::read::<usize>(opaque as *const usize);
@@ -118,24 +165,77 @@ impl Context {
             }
         }
 
-        let mut len = value.len();
-        let value = Box::into_raw(value.into_boxed_slice()) as *mut u8;
+        let value = value.as_ref();
 
-        let value = unsafe {
-            sys::JS_NewArrayBuffer(
-                self.0,
-                value,
-                len,
-                Some(free),
-                if len == 0 {
-                    ptr::null_mut()
-                } else {
-                    ptr::addr_of_mut!(len)
-                } as *mut c_void,
-                0,
-            )
-        };
+        let mut len = value.len();
+        let opaque = if len == 0 {
+            ptr::null_mut()
+        } else {
+            ptr::addr_of_mut!(len)
+        } as *mut c_void;
+
+        let value = Box::into_raw(value.to_owned().into_boxed_slice()) as *mut u8;
+        let value = unsafe { sys::JS_NewArrayBuffer(self.0, value, len, Some(free), opaque, 0) };
         Ok(JSValueRef::from_value(self.0, value))
+    }
+
+    pub fn make_function<F>(
+        &self,
+        this: Option<JSValueRef>,
+        name: impl AsRef<str>,
+        args: i32,
+        value: F,
+    ) where
+        F: Fn(ManuallyDrop<Context>, Vec<ManuallyDrop<JSValueRef>>) -> JSValueRef,
+    {
+        unsafe extern "C" fn inner<F>(
+            ctx: *mut sys::JSContext,
+            _: sys::JSValue,
+            argc: c_int,
+            argv: *mut sys::JSValue,
+            _: c_int,
+            func: *mut sys::JSValue,
+        ) -> sys::JSValue
+        where
+            F: Fn(ManuallyDrop<Context>, Vec<ManuallyDrop<JSValueRef>>) -> JSValueRef,
+        {
+            let func = ManuallyDrop::new(JSValueRef::from_value(ctx, *func));
+            let ptr = match func.to_ptr() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("{e}");
+                    return ManuallyDrop::new(Context(ctx)).make_null().val();
+                }
+            };
+            let closure = &mut *(ptr as *mut F);
+
+            let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
+            let args: Vec<ManuallyDrop<JSValueRef>> = args
+                .into_iter()
+                .map(|v| JSValueRef::from_value(ctx, *v))
+                .map(ManuallyDrop::new)
+                .collect();
+
+            closure(ManuallyDrop::new(Context(ctx)), args).val()
+        }
+
+        let name = format!("{}\0", name.as_ref());
+
+        let data = Box::into_raw(Box::new(value));
+        let data = unsafe { self.make_ptr(data as *mut c_void) }.val();
+        let data = (&data) as *const sys::JSValue as *mut sys::JSValue;
+
+        unsafe {
+            let func = sys::JS_NewCFunctionData(self.0, Some(inner::<F>), args, 0, 1, data);
+
+            let this = match this {
+                Some(v) => v.val(),
+                None => sys::JS_GetGlobalObject(self.0),
+            };
+            sys::JS_SetPropertyStr(self.0, this, name.as_ptr() as _, func);
+
+            drop(JSValueRef::from_value(self.0, this));
+        }
     }
 }
 

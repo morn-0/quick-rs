@@ -18,6 +18,16 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
+extern "C" {
+    fn JS_GetPropertyInternal_real(
+        ctx: *mut sys::JSContext,
+        obj: sys::JSValue,
+        prop: sys::JSAtom,
+        this_obj: sys::JSValue,
+        throw_ref_error: c_int,
+    ) -> sys::JSValue;
+}
+
 #[derive(Default, Clone)]
 struct PromiseState {
     data: Option<JSValueRef>,
@@ -54,8 +64,7 @@ impl Future for Promise {
                 let ctx = value.ctx;
                 let this = value.val();
 
-                #[rustfmt::skip]
-                let then = sys::JS_GetPropertyInternal(ctx, this, sys::JS_ATOM_then, this, 0);
+                let then = sys::JS_GetProperty(ctx, this, sys::JS_ATOM_then);
                 let then = match Function::new(JSValueRef::from_value(ctx, then)) {
                     Ok(v) => v,
                     Err(e) => {
