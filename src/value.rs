@@ -1,10 +1,10 @@
 use crate::{context::Context, error::QuickError};
-use anyhow::Result;
 use log::error;
 use quickjs_sys as sys;
 use std::{
     f64,
     ffi::{c_void, CString},
+    fmt::Display,
     mem::{self, ManuallyDrop, MaybeUninit},
     slice,
 };
@@ -43,11 +43,22 @@ impl JSValueRef {
         JSValueRef { ctx, tag, ptr, val }
     }
 
+    pub fn get_property(&self, prop: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
+        let prop = match CString::new(prop.as_ref()) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(QuickError::CString(format!("{}, {e}", prop.as_ref())));
+            }
+        };
+        let value = unsafe { sys::JS_GetPropertyStr(self.ctx, self.val, prop.as_ptr()) };
+        Ok(JSValueRef::from_value(self.ctx, value))
+    }
+
     pub fn set_property(&self, prop: impl AsRef<str>, value: JSValueRef) -> Result<(), QuickError> {
         let prop = match CString::new(prop.as_ref()) {
             Ok(v) => v,
             Err(e) => {
-                return Err(QuickError::CStringError(e.to_string()));
+                return Err(QuickError::CString(format!("{}, {e}", prop.as_ref())));
             }
         };
 
@@ -57,22 +68,11 @@ impl JSValueRef {
         Ok(())
     }
 
-    pub fn property(&self, prop: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
-        let prop = match CString::new(prop.as_ref()) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(QuickError::CStringError(e.to_string()));
-            }
-        };
-        let value = unsafe { sys::JS_GetPropertyStr(self.ctx, self.val, prop.as_ptr()) };
-        Ok(JSValueRef::from_value(self.ctx, value))
-    }
-
     pub fn to_bool(&self) -> Result<bool, QuickError> {
         if self.tag == sys::JS_TAG_BOOL {
             Ok(unsafe { JS_VALUE_GET_INT_real(self.val) } != 0)
         } else {
-            Err(QuickError::UnsupportedTypeError(self.tag))
+            Err(QuickError::Type(self.tag))
         }
     }
 
@@ -80,20 +80,15 @@ impl JSValueRef {
         if self.tag == sys::JS_TAG_INT {
             Ok(unsafe { JS_VALUE_GET_INT_real(self.val) })
         } else {
-            Err(QuickError::UnsupportedTypeError(self.tag))
+            Err(QuickError::Type(self.tag))
         }
-    }
-
-    /// # Safety
-    pub unsafe fn to_ptr(&self) -> Result<*mut c_void, QuickError> {
-        Ok(JS_VALUE_GET_PTR_real(self.val))
     }
 
     pub fn to_f64(&self) -> Result<f64, QuickError> {
         if self.tag == sys::JS_TAG_FLOAT64 {
             Ok(unsafe { JS_VALUE_GET_FLOAT64_real(self.val) })
         } else {
-            Err(QuickError::UnsupportedTypeError(self.tag))
+            Err(QuickError::Type(self.tag))
         }
     }
 
@@ -113,12 +108,12 @@ impl JSValueRef {
 
             Ok(string)
         } else {
-            Err(QuickError::UnsupportedTypeError(self.tag))
+            Err(QuickError::Type(self.tag))
         }
     }
 
     pub fn to_array(&self) -> Result<Vec<JSValueRef>, QuickError> {
-        let length = self.property("length")?;
+        let length = self.get_property("length")?;
         let length = length.to_i32()?;
 
         let mut array = Vec::with_capacity(length as usize);
@@ -143,7 +138,7 @@ impl JSValueRef {
             let len = len / mem::size_of::<T>();
             Ok(unsafe { slice::from_raw_parts(ptr.cast(), len) })
         } else {
-            Err(QuickError::UnsupportedTypeError(self.tag))
+            Err(QuickError::Type(self.tag))
         }
     }
 
@@ -157,7 +152,7 @@ impl JSValueRef {
             let len = len / mem::size_of::<T>();
             Ok(unsafe { slice::from_raw_parts_mut(ptr.cast(), len) })
         } else {
-            Err(QuickError::UnsupportedTypeError(self.tag))
+            Err(QuickError::Type(self.tag))
         }
     }
 
@@ -167,6 +162,11 @@ impl JSValueRef {
 
         let value = unsafe { sys::JS_JSONStringify(self.ctx, self.val, undefined, undefined) };
         JSValueRef::from_value(self.ctx, value).to_string()
+    }
+
+    /// # Safety
+    pub unsafe fn to_ptr(&self) -> Result<*mut c_void, QuickError> {
+        Ok(JS_VALUE_GET_PTR_real(self.val))
     }
 
     #[inline(always)]
@@ -207,9 +207,9 @@ impl Drop for JSValueRef {
 
 pub struct Exception(pub JSValueRef);
 
-impl ToString for Exception {
-    fn to_string(&self) -> String {
-        let name = match self.0.property("name").and_then(|v| v.to_string()) {
+impl Display for Exception {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self.0.get_property("name").and_then(|v| v.to_string()) {
             Ok(v) => v,
             Err(e) => {
                 error!("{e}");
@@ -217,7 +217,7 @@ impl ToString for Exception {
             }
         };
 
-        let message = match self.0.property("message").and_then(|v| v.to_string()) {
+        let message = match self.0.get_property("message").and_then(|v| v.to_string()) {
             Ok(v) => v,
             Err(e) => {
                 error!("{e}");
@@ -225,7 +225,7 @@ impl ToString for Exception {
             }
         };
 
-        let stack = match self.0.property("stack").and_then(|v| v.to_string()) {
+        let stack = match self.0.get_property("stack").and_then(|v| v.to_string()) {
             Ok(v) => v,
             Err(e) => {
                 error!("{e}");
@@ -233,6 +233,6 @@ impl ToString for Exception {
             }
         };
 
-        format!("{name} {message} {stack}")
+        write!(f, "name: {name}, message: {message}, stack: {stack}")
     }
 }

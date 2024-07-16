@@ -3,7 +3,6 @@ use crate::{
     error::QuickError,
     value::{Exception, JSValueRef},
 };
-use anyhow::Result;
 use quickjs_sys as sys;
 use std::mem::ManuallyDrop;
 
@@ -12,8 +11,8 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(value: JSValueRef) -> Result<Self> {
-        Ok(Function { value })
+    pub fn new(value: JSValueRef) -> Self {
+        Function { value }
     }
 
     pub fn call(
@@ -45,7 +44,7 @@ impl Function {
             let value = unsafe { sys::JS_GetException(self.value.ctx) };
             let value = JSValueRef::from_value(self.value.ctx, value);
 
-            Err(QuickError::CallError(Exception(value).to_string()))
+            Err(QuickError::Call(Exception(value).to_string()))
         } else {
             Ok(value)
         }

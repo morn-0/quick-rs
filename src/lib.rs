@@ -28,7 +28,7 @@ function main() {
 main();
 "#;
     let val = context.eval_global(script, "main").unwrap();
-    let mut buffer = val.property("buffer").unwrap();
+    let mut buffer = val.get_property("buffer").unwrap();
     let buffer = buffer.to_buffer_mut::<u8>().unwrap();
     println!("{:?}", buffer);
     buffer[0] = 42;
@@ -36,7 +36,7 @@ main();
     context.make_function(None, "fibonacci", 2, |ctx, args| {
         fn fibonacci(n: u32) -> u64 {
             if n == 0 {
-                return 0;
+                0
             } else if n == 1 {
                 return 1;
             } else {
@@ -67,7 +67,7 @@ export function main(uint8, buffer, text) {
     let module = Module::new(value).unwrap();
 
     let value = module.get("main").unwrap();
-    let function = Function::new(value).unwrap();
+    let function = Function::new(value);
 
     loop {
         let now = std::time::Instant::now();

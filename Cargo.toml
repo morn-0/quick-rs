@@ -12,17 +12,9 @@ path = "src/lib.rs"
 
 [features]
 default = []
-json = ["serde", "serde_json"]
 mimalloc = ["quickjs-sys/mimalloc"]
 
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
 thiserror = { version = "1", default-features = false }
-anyhow = { version = "1", features = ["std"], default-features = false }
 log = { version = "0.4", default-features = false }
-serde = { version = "1", features = [
-    "derive",
-], default-features = false, optional = true }
-serde_json = { version = "1", features = [
-    "std",
-], default-features = false, optional = true }

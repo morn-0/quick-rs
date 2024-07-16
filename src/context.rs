@@ -5,8 +5,6 @@ use crate::{
 };
 use log::error;
 use quickjs_sys as sys;
-#[cfg(feature = "json")]
-use serde::Serialize;
 use std::{
     ffi::{c_double, c_int, c_void, CString},
     mem::ManuallyDrop,
@@ -63,7 +61,7 @@ impl Context {
         let (c_source, c_name) = match (CString::new(source.as_ref()), CString::new(name.as_ref()))
         {
             (Ok(a), Ok(b)) => (a, b),
-            _ => return Err(QuickError::CStringError(source.as_ref().to_string())),
+            _ => return Err(QuickError::CString(source.as_ref().to_string())),
         };
 
         unsafe {
@@ -76,11 +74,11 @@ impl Context {
             );
             let value = JSValueRef::from_value(self.0, value);
 
-            if value.tag() == sys::JS_TAG_EXCEPTION {
+            if value.is_exception() {
                 let value = sys::JS_GetException(self.0);
                 let value = JSValueRef::from_value(self.0, value);
 
-                Err(QuickError::EvalError(Exception(value).to_string()))
+                Err(QuickError::Eval(Exception(value).to_string()))
             } else {
                 Ok(value)
             }
@@ -127,35 +125,12 @@ impl Context {
         let value = match CString::new(value.as_ref()) {
             Ok(v) => v,
             Err(e) => {
-                return Err(QuickError::CStringError(e.to_string()));
+                return Err(QuickError::CString(e.to_string()));
             }
         };
         let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
 
         Ok(JSValueRef::from_value(self.0, value))
-    }
-
-    #[cfg(feature = "json")]
-    pub fn make_json<T>(&self, value: T) -> anyhow::Result<JSValueRef>
-    where
-        T: Serialize,
-    {
-        let json = serde_json::to_string(&value)?;
-
-        let mut buf = json.into_bytes();
-        let len = buf.len();
-        buf.push(0);
-
-        let json = unsafe {
-            sys::JS_ParseJSON(
-                self.0,
-                buf.as_ptr() as *const _,
-                len,
-                b"<input>\0".as_ptr() as *const _,
-            )
-        };
-
-        Ok(JSValueRef::from_value(self.0, json))
     }
 
     pub fn make_buffer(&self, value: impl AsRef<[u8]>) -> Result<JSValueRef, QuickError> {
@@ -211,13 +186,12 @@ impl Context {
             };
             let closure = &mut *(ptr as *mut F);
 
-            let ctx = Context(ctx);
             let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
             let args: Vec<JSValueRef> = args
-                .into_iter()
-                .map(|v| JSValueRef::from_value(ctx.0, *v))
+                .iter()
+                .map(|v| JSValueRef::from_value(ctx, *v))
                 .collect();
-
+            let ctx = Context(ctx);
             let val = closure(&ctx, &args).val();
 
             std::mem::forget(ctx);

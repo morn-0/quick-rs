@@ -22,11 +22,11 @@ impl Module {
         let _value = unsafe { sys::JS_EvalFunction(value.ctx, value.clone().val()) };
         let _value = JSValueRef::from_value(value.ctx, _value);
 
-        if _value.tag() == sys::JS_TAG_EXCEPTION {
+        if _value.is_exception() {
             let exception = unsafe { sys::JS_GetException(value.ctx) };
             let exception = JSValueRef::from_value(value.ctx, exception);
 
-            Err(QuickError::EvalError(Exception(exception).to_string()))
+            Err(QuickError::Eval(Exception(exception).to_string()))
         } else {
             Ok(Module { value })
         }
@@ -35,7 +35,7 @@ impl Module {
     pub fn get(&self, name: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
         let c_name = match CString::new(name.as_ref()) {
             Ok(c_name) => c_name,
-            Err(e) => return Err(QuickError::CStringError(e.to_string())),
+            Err(e) => return Err(QuickError::CString(e.to_string())),
         };
 
         let value = unsafe {
@@ -47,11 +47,11 @@ impl Module {
         };
         let value = JSValueRef::from_value(self.value.ctx, value);
 
-        if value.tag() == sys::JS_TAG_EXCEPTION {
+        if value.is_exception() {
             let value = unsafe { sys::JS_GetException(self.value.ctx) };
             let value = JSValueRef::from_value(self.value.ctx, value);
 
-            Err(QuickError::EvalError(Exception(value).to_string()))
+            Err(QuickError::Eval(Exception(value).to_string()))
         } else {
             Ok(value)
         }
