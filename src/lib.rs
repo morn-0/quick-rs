@@ -1,7 +1,4 @@
-use std::{mem::ManuallyDrop, time::Duration};
-
 pub use quickjs_sys as sys;
-use runtime::COMPIO;
 
 pub mod context;
 pub mod error;
@@ -21,32 +18,17 @@ fn main() {
     let runtime = Runtime::default();
     let context = Rc::new(Context::from(&runtime));
     context.make_function(None, "print", 1, |ctx, argv| {
-        let v = argv.get(0).unwrap().to_string().unwrap();
+        let v = argv[0].to_string().unwrap();
         println!("{v}");
         ctx.make_undefined()
     });
     context.make_function(None, "setTimeout", 2, |ctx, argv| {
-        COMPIO.with(|v| {
-            v.spawn(async move {
-                let millis = argv.get(1).unwrap().to_i32().unwrap();
-                println!("{millis}");
-                compio::time::sleep(std::time::Duration::from_millis(millis as u64)).await;
+        let millis = argv[1].to_i32().unwrap();
+        println!("{millis}");
 
-                let function =
-                    Function::new(ManuallyDrop::into_inner(argv.get(0).unwrap().clone())).unwrap();
-                function
-                    .call(
-                        None,
-                        argv[2..]
-                            .iter()
-                            .map(|v| ManuallyDrop::into_inner(v.clone()))
-                            .collect(),
-                    )
-                    .unwrap();
-            });
-        });
+        let function = Function::new(argv[0].clone()).unwrap();
+        function.call(None, argv[2..].to_vec()).unwrap();
 
-        std::thread::sleep(Duration::from_secs(1));
         ctx.make_undefined()
     });
 
@@ -88,9 +70,6 @@ fn main() {
 
             Box::pin(async move {
                 let now = std::time::Instant::now();
-                compio::runtime::spawn(async move {
-                    println!("cnm, 5ms");
-                });
 
                 let value = promise.await.unwrap().to_i32().unwrap();
                 println!("{value}");
@@ -124,7 +103,7 @@ main();
     context.make_function(None, "fibonacci", 2, |ctx, args| {
         fn fibonacci(n: u32) -> u64 {
             if n == 0 {
-                return 0;
+                0
             } else if n == 1 {
                 return 1;
             } else {
