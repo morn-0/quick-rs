@@ -7,6 +7,7 @@ pub mod module;
 pub mod runtime;
 pub mod value;
 
+#[test]
 fn main() {
     use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
 
@@ -69,7 +70,7 @@ export function main(uint8, buffer, text) {
     let value = module.get("main").unwrap();
     let function = Function::new(value);
 
-    loop {
+    for _ in 0..1000 {
         let now = std::time::Instant::now();
         let value = function
             .call(
@@ -78,6 +79,12 @@ export function main(uint8, buffer, text) {
                     val.clone(),
                     nb.clone(),
                     context.make_string("test").unwrap(),
+                    context.make_bool(true),
+                    context.make_int(32),
+                    context.make_object(),
+                    context.make_float(0.2),
+                    context.make_null(),
+                    context.make_undefined(),
                 ],
             )
             .unwrap();

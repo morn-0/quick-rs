@@ -5,7 +5,7 @@ use std::{
     f64,
     ffi::{c_void, CString},
     fmt::Display,
-    mem::{self, ManuallyDrop, MaybeUninit},
+    mem::{self, MaybeUninit},
     slice,
 };
 
@@ -16,6 +16,10 @@ extern "C" {
     fn JS_VALUE_GET_PTR_real(v: sys::JSValue) -> *mut c_void;
     fn JS_DupValue_real(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue;
     fn JS_FreeValue_real(ctx: *mut sys::JSContext, v: sys::JSValue);
+}
+
+pub(crate) fn dup_value(ctx: *mut sys::JSContext, v: sys::JSValue) -> sys::JSValue {
+    unsafe { JS_DupValue_real(ctx, v) }
 }
 
 pub trait Number {}
@@ -30,17 +34,52 @@ impl Number for f32 {}
 impl Number for f64 {}
 
 pub struct JSValueRef {
-    pub(crate) ctx: *mut sys::JSContext,
-    pub(crate) val: sys::JSValue,
+    ctx: Context,
+    val: sys::JSValue,
     tag: i32,
     ptr: *mut c_void,
 }
 
+impl Clone for JSValueRef {
+    fn clone(&self) -> Self {
+        let v = unsafe { JS_DupValue_real(self.ctx.ptr(), self.val) };
+        Self::from_value(self.ctx.clone(), v)
+    }
+}
+
+impl Drop for JSValueRef {
+    fn drop(&mut self) {
+        unsafe {
+            JS_FreeValue_real(self.ctx.ptr(), self.val);
+        }
+    }
+}
+
 impl JSValueRef {
-    pub fn from_value(ctx: *mut sys::JSContext, val: sys::JSValue) -> Self {
+    pub fn from_value(ctx: Context, val: sys::JSValue) -> Self {
         let tag = unsafe { JS_VALUE_GET_TAG_real(val) };
         let ptr = unsafe { JS_VALUE_GET_PTR_real(val) };
         JSValueRef { ctx, tag, ptr, val }
+    }
+
+    #[inline(always)]
+    pub fn ctx(&self) -> &Context {
+        &self.ctx
+    }
+
+    #[inline(always)]
+    pub fn val(&self) -> sys::JSValue {
+        self.val
+    }
+
+    #[inline(always)]
+    pub fn tag(&self) -> i32 {
+        self.tag
+    }
+
+    #[inline(always)]
+    pub fn ptr(&self) -> *mut c_void {
+        self.ptr
     }
 
     pub fn get_property(&self, prop: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
@@ -50,8 +89,8 @@ impl JSValueRef {
                 return Err(QuickError::CString(format!("{}, {e}", prop.as_ref())));
             }
         };
-        let value = unsafe { sys::JS_GetPropertyStr(self.ctx, self.val, prop.as_ptr()) };
-        Ok(JSValueRef::from_value(self.ctx, value))
+        let value = unsafe { sys::JS_GetPropertyStr(self.ctx.ptr(), self.val, prop.as_ptr()) };
+        Ok(JSValueRef::from_value(self.ctx.clone(), value))
     }
 
     pub fn set_property(&self, prop: impl AsRef<str>, value: JSValueRef) -> Result<(), QuickError> {
@@ -63,7 +102,7 @@ impl JSValueRef {
         };
 
         unsafe {
-            sys::JS_SetPropertyStr(self.ctx, self.val, prop.as_ptr(), value.val());
+            sys::JS_SetPropertyStr(self.ctx.ptr(), self.val, prop.as_ptr(), value.val());
         }
         Ok(())
     }
@@ -96,14 +135,14 @@ impl JSValueRef {
         if self.tag == sys::JS_TAG_STRING {
             let (data, len) = unsafe {
                 let mut len = 0;
-                let data = sys::JS_ToCStringLen2(self.ctx, &mut len, self.val, 0) as *const _;
+                let data = sys::JS_ToCStringLen2(self.ctx.ptr(), &mut len, self.val, 0) as *const _;
                 (data, len)
             };
             let buf = unsafe { slice::from_raw_parts(data, len) };
 
             let string = String::from_utf8_lossy(buf).to_string();
             unsafe {
-                sys::JS_FreeCString(self.ctx, data as *const _);
+                sys::JS_FreeCString(self.ctx.ptr(), data as *const _);
             }
 
             Ok(string)
@@ -120,8 +159,8 @@ impl JSValueRef {
 
         for i in 0..length {
             unsafe {
-                let value = sys::JS_GetPropertyUint32(self.ctx, self.val, i as u32);
-                array.push(JSValueRef::from_value(self.ctx, value));
+                let value = sys::JS_GetPropertyUint32(self.ctx.ptr(), self.val, i as u32);
+                array.push(JSValueRef::from_value(self.ctx.clone(), value));
             }
         }
 
@@ -132,7 +171,8 @@ impl JSValueRef {
         if unsafe { sys::JS_IsArrayBuffer(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
 
-            let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx, size.as_mut_ptr(), self.val) };
+            #[rustfmt::skip]
+            let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx.ptr(), size.as_mut_ptr(), self.val) };
             let len: usize = unsafe { size.assume_init() };
 
             let len = len / mem::size_of::<T>();
@@ -146,7 +186,8 @@ impl JSValueRef {
         if unsafe { sys::JS_IsArrayBuffer(self.val) == 1 } {
             let mut size = MaybeUninit::<usize>::uninit();
 
-            let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx, size.as_mut_ptr(), self.val) };
+            #[rustfmt::skip]
+            let ptr = unsafe { sys::JS_GetArrayBuffer(self.ctx.ptr(), size.as_mut_ptr(), self.val) };
             let len: usize = unsafe { size.assume_init() };
 
             let len = len / mem::size_of::<T>();
@@ -157,51 +198,11 @@ impl JSValueRef {
     }
 
     pub fn to_json(&self) -> Result<String, QuickError> {
-        let ctx = ManuallyDrop::new(Context(self.ctx));
-        let undefined = ctx.make_undefined().val();
+        let undefined = self.ctx.make_undefined().val();
 
-        let value = unsafe { sys::JS_JSONStringify(self.ctx, self.val, undefined, undefined) };
-        JSValueRef::from_value(self.ctx, value).to_string()
-    }
-
-    /// # Safety
-    pub unsafe fn to_ptr(&self) -> Result<*mut c_void, QuickError> {
-        Ok(JS_VALUE_GET_PTR_real(self.val))
-    }
-
-    #[inline(always)]
-    pub fn is_exception(&self) -> bool {
-        self.tag == sys::JS_TAG_EXCEPTION
-    }
-
-    #[inline(always)]
-    pub fn tag(&self) -> i32 {
-        self.tag
-    }
-
-    #[inline(always)]
-    pub fn ptr(&self) -> *mut c_void {
-        self.ptr
-    }
-
-    #[inline(always)]
-    pub fn val(self) -> sys::JSValue {
-        ManuallyDrop::new(self).val
-    }
-}
-
-impl Clone for JSValueRef {
-    fn clone(&self) -> Self {
-        let v = unsafe { JS_DupValue_real(self.ctx, self.val) };
-        Self::from_value(self.ctx, v)
-    }
-}
-
-impl Drop for JSValueRef {
-    fn drop(&mut self) {
-        unsafe {
-            JS_FreeValue_real(self.ctx, self.val);
-        }
+        #[rustfmt::skip]
+        let value = unsafe { sys::JS_JSONStringify(self.ctx.ptr(), self.val, undefined, undefined) };
+        JSValueRef::from_value(self.ctx.clone(), value).to_string()
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     error::QuickError,
-    value::{Exception, JSValueRef},
+    value::{self, Exception, JSValueRef},
 };
 use quickjs_sys as sys;
 use std::ffi::{c_char, CString};
@@ -19,12 +19,14 @@ pub struct Module {
 
 impl Module {
     pub fn new(value: JSValueRef) -> Result<Self, QuickError> {
-        let _value = unsafe { sys::JS_EvalFunction(value.ctx, value.clone().val()) };
-        let _value = JSValueRef::from_value(value.ctx, _value);
+        let function = value::dup_value(value.ctx().ptr(), value.val());
 
-        if _value.is_exception() {
-            let exception = unsafe { sys::JS_GetException(value.ctx) };
-            let exception = JSValueRef::from_value(value.ctx, exception);
+        let ret = unsafe { sys::JS_EvalFunction(value.ctx().ptr(), function) };
+        let ret = JSValueRef::from_value(value.ctx().clone(), ret);
+
+        if ret.tag() == sys::JS_TAG_EXCEPTION {
+            let exception = unsafe { sys::JS_GetException(value.ctx().ptr()) };
+            let exception = JSValueRef::from_value(value.ctx().clone(), exception);
 
             Err(QuickError::Eval(Exception(exception).to_string()))
         } else {
@@ -40,16 +42,16 @@ impl Module {
 
         let value = unsafe {
             JS_GetModuleExport_real(
-                self.value.ctx,
+                self.value.ctx().ptr(),
                 self.value.ptr() as *mut sys::JSModuleDef,
                 c_name.as_ptr() as *const _,
             )
         };
-        let value = JSValueRef::from_value(self.value.ctx, value);
+        let value = JSValueRef::from_value(self.value.ctx().clone(), value);
 
-        if value.is_exception() {
-            let value = unsafe { sys::JS_GetException(self.value.ctx) };
-            let value = JSValueRef::from_value(self.value.ctx, value);
+        if value.tag() == sys::JS_TAG_EXCEPTION {
+            let value = unsafe { sys::JS_GetException(self.value.ctx().ptr()) };
+            let value = JSValueRef::from_value(self.value.ctx().clone(), value);
 
             Err(QuickError::Eval(Exception(value).to_string()))
         } else {
