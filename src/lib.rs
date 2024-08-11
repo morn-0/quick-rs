@@ -34,7 +34,13 @@ main();
     println!("{:?}", buffer);
     buffer[0] = 42;
 
-    context.make_function(None, "fibonacci", 2, |ctx, args| {
+    let obj = context.make_object();
+    obj.set_property("num", context.make_int(30)).unwrap();
+    obj.set_property("text", context.make_string("test").unwrap())
+        .unwrap();
+
+    context.make_function(Some(obj.clone()), "fibonacci", 2, |ctx, args| {
+        // context.make_function(None, "fibonacci", 2, |ctx, args| {
         fn fibonacci(n: u32) -> u64 {
             if n == 0 {
                 0
@@ -47,11 +53,12 @@ main();
 
         let v = fibonacci(args[0].to_i32().unwrap() as u32) as i32;
         let string = args[1].to_string().unwrap();
-        drop(string);
 
-        println!("{v}");
+        println!("{v} {string}");
         ctx.make_int(v)
     });
+
+    context.global().set_property("obj", obj).unwrap();
 
     let script = r#"
 export function main(uint8, buffer, text) {
@@ -59,7 +66,7 @@ export function main(uint8, buffer, text) {
 
     return {
         "data": uint8,
-        "array": [fibonacci(30, text), 1, "2", text],
+        "array": [obj.fibonacci(obj.num, obj.text), 1, "2", text],
         "buffer": buffer
     };
 }
@@ -70,7 +77,8 @@ export function main(uint8, buffer, text) {
     let value = module.get("main").unwrap();
     let function = Function::new(value);
 
-    for _ in 0..1000 {
+    // for _ in 0..1000 {
+    loop {
         let now = std::time::Instant::now();
         let value = function
             .call(

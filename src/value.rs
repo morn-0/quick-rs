@@ -102,7 +102,12 @@ impl JSValueRef {
         };
 
         unsafe {
-            sys::JS_SetPropertyStr(self.ctx.ptr(), self.val, prop.as_ptr(), value.val());
+            sys::JS_SetPropertyStr(
+                self.ctx.ptr(),
+                self.val,
+                prop.as_ptr(),
+                dup_value(value.ctx().ptr(), value.val()),
+            );
         }
         Ok(())
     }

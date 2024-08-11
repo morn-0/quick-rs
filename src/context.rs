@@ -47,6 +47,10 @@ impl Drop for Context {
 }
 
 impl Context {
+    pub fn global(&self) -> JSValueRef {
+        JSValueRef::from_value(self.clone(), unsafe { sys::JS_GetGlobalObject(self.0) })
+    }
+
     pub fn eval_module(
         &self,
         source: impl AsRef<str>,
@@ -217,7 +221,7 @@ impl Context {
             let func = sys::JS_NewCFunctionData(self.0, Some(inner::<F>), args, 0, 1, data);
 
             let this = match this {
-                Some(v) => v.val(),
+                Some(v) => value::dup_value(v.ctx().ptr(), v.val()),
                 None => sys::JS_GetGlobalObject(self.0),
             };
             sys::JS_SetPropertyStr(self.0, this, name.as_ptr() as _, func);
