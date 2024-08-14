@@ -204,11 +204,8 @@ impl Context {
                 .map(|v| JSValueRef::from_value(ctx.clone(), value::dup_value(ctx.ptr(), *v)))
                 .collect();
 
-            let val = closure(ctx.clone(), args).val();
-
-            std::mem::forget(ctx);
-
-            val
+            let value = closure(ctx.clone(), args);
+            value::dup_value(ctx.ptr(), value.val())
         }
 
         let name = format!("{}\0", name.as_ref());
