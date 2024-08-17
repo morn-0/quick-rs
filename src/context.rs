@@ -194,8 +194,7 @@ impl Context {
         {
             let ctx = Context(ctx);
 
-            #[rustfmt::skip]
-            let closure = JSValueRef::from_value(ctx.clone(), value::dup_value(ctx.ptr(), *func));
+            let closure = JSValueRef::from_value(ctx.clone(), *func);
             let closure = &mut *(closure.ptr() as *mut F);
 
             let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
@@ -205,7 +204,11 @@ impl Context {
                 .collect();
 
             let value = closure(ctx.clone(), args);
-            value::dup_value(ctx.ptr(), value.val())
+            let value = value::dup_value(ctx.ptr(), value.val());
+
+            std::mem::forget(ctx);
+
+            value
         }
 
         let name = format!("{}\0", name.as_ref());
