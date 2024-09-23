@@ -6,7 +6,7 @@ use std::{
     fs,
     mem::ManuallyDrop,
     path::Path,
-    ptr::null_mut,
+    ptr,
 };
 
 pub trait UserLoader {
@@ -57,12 +57,12 @@ extern "C" fn module_loader(
             Ok(value) => value.ptr() as *mut sys::JSModuleDef,
             Err(e) => {
                 error!("{e}");
-                null_mut()
+                ptr::null_mut()
             }
         };
     }
 
-    null_mut()
+    ptr::null_mut()
 }
 
 pub struct Runtime(pub *mut sys::JSRuntime);
@@ -82,7 +82,7 @@ impl Runtime {
 
             let opaque = match loader {
                 Some(loader) => Box::into_raw(loader) as _,
-                None => null_mut(),
+                None => ptr::null_mut(),
             };
             sys::JS_SetModuleLoaderFunc(rt, Some(module_normalize), Some(module_loader), opaque);
 

@@ -12,7 +12,6 @@ path = "src/lib.rs"
 
 [features]
 default = []
-mimalloc = ["quickjs-sys/mimalloc"]
 
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }

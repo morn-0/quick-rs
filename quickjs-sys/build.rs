@@ -32,11 +32,6 @@ fn main() {
     for patch in fs::read_dir(patch).unwrap() {
         let patch = patch.unwrap().path();
 
-        #[cfg(not(feature = "mimalloc"))]
-        if patch.ends_with("support-rust-malloc.patch") {
-            continue;
-        }
-
         Command::new("patch")
             .current_dir(&code_path)
             .arg("-i")
@@ -71,6 +66,7 @@ fn main() {
         .flag_if_supported("-Wno-unused-but-set-variable")
         .flag_if_supported("-Wno-array-bounds")
         .flag_if_supported("-Wno-format-truncation")
+        .flag_if_supported("-Wno-format-zero-length")
         .flag_if_supported("-funsigned-char")
         .opt_level(2)
         .compile(LIB_NAME);
