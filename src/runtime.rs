@@ -9,6 +9,47 @@ use std::{
     ptr,
 };
 
+#[cfg(feature = "mimalloc")]
+#[no_mangle]
+extern "C" fn rust_calloc(_: *mut c_void, count: usize, size: usize) -> *mut c_void {
+    unsafe { libmimalloc_sys::mi_calloc(count, size) }
+}
+
+#[cfg(feature = "mimalloc")]
+#[no_mangle]
+extern "C" fn rust_malloc(_: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { libmimalloc_sys::mi_malloc(size) }
+}
+
+#[cfg(feature = "mimalloc")]
+#[no_mangle]
+extern "C" fn rust_free(_: *mut c_void, ptr: *mut c_void) {
+    unsafe {
+        libmimalloc_sys::mi_free(ptr);
+    }
+}
+
+#[cfg(feature = "mimalloc")]
+#[no_mangle]
+extern "C" fn rust_realloc(_: *mut c_void, ptr: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { libmimalloc_sys::mi_realloc(ptr, size) }
+}
+
+#[cfg(feature = "mimalloc")]
+#[no_mangle]
+extern "C" fn rust_usable_size(ptr: *const c_void) -> usize {
+    unsafe { libmimalloc_sys::mi_usable_size(ptr) }
+}
+
+#[cfg(feature = "mimalloc")]
+static MF: sys::JSMallocFunctions = sys::JSMallocFunctions {
+    js_calloc: Some(rust_calloc),
+    js_malloc: Some(rust_malloc),
+    js_free: Some(rust_free),
+    js_realloc: Some(rust_realloc),
+    js_malloc_usable_size: Some(rust_usable_size),
+};
+
 pub trait UserLoader {
     fn load(
         &self,
@@ -70,6 +111,9 @@ pub struct Runtime(pub *mut sys::JSRuntime);
 impl Runtime {
     pub fn new(heap: usize, stack: usize, loader: Option<Box<&mut dyn UserLoader>>) -> Self {
         let rt = unsafe {
+            #[cfg(feature = "mimalloc")]
+            let rt = sys::JS_NewRuntime2(&MF as *const _, ptr::null_mut());
+            #[cfg(not(feature = "mimalloc"))]
             let rt = sys::JS_NewRuntime();
 
             if heap != 0 {
