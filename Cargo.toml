@@ -22,7 +22,7 @@ image = { version = "0.24", features = [
 ], default-features = false }
 imageproc = { version = "0.23", default-features = false }
 image_hasher = { version = "1", default-features = false }
-fast_qr = { version = "0.10", features = ["image"], default-features = false }
+fast_qr = { version = "0.12", features = ["image"], default-features = false }
 barcoders = { version = "1", features = ["image"], default-features = false }
 tiny-skia = { version = "0.11", features = [
     "std",

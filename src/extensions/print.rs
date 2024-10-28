@@ -173,6 +173,7 @@ unsafe extern "C" fn qrcode(
             .shape(Shape::Square)
             .background_color([255, 255, 255, 0])
             .fit_width(width as u32)
+            .margin(1)
             .to_pixmap(&qrcode);
 
         if let Ok(image_buf) = pixmap.encode_png() {
