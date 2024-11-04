@@ -246,7 +246,7 @@ unsafe extern "C" fn barcode(
         let encoded = barcode.encode();
         let height = height as u32;
 
-        let image = BarImage::JPEG {
+        let image = BarImage::PNG {
             height,
             xdim,
             rotation: Rotation::Zero,
