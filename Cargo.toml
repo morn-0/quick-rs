@@ -19,5 +19,5 @@ quickjs-sys = { path = "quickjs-sys" }
 libmimalloc-sys = { version = "0.1", features = [
     "extended",
 ], default-features = false, optional = true }
-thiserror = { version = "1", default-features = false }
+thiserror = { version = "2", default-features = false }
 log = { version = "0.4", default-features = false }
