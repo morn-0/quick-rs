@@ -36,13 +36,24 @@ fn main() {
         "static-functions.c",
     ];
 
-    cc::Build::new()
-        .files(sources.iter().map(|f| code_path.join(f)))
+    let mut cc = cc::Build::new();
+
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
+
+    if target_arch == "x86" && target_env == "msvc" {
+        env::set_var("MSVC_CFLAGS", "-arch:sse");
+        cc.try_flags_from_environment("MSVC_CFLAGS").unwrap();
+    }
+
+    if target_env != "msvc" {
+        cc.flag_if_supported("-Werror");
+    }
+
+    cc.files(sources.iter().map(|f| code_path.join(f)))
         .define("_GNU_SOURCE", None)
-        .define("CONFIG_MODULE_EXPORT", None)
-        .std("c11")
-        .flag_if_supported("-Werror")
-        .flag_if_supported("-Wextra")
+        .std("c11");
+    cc.flag_if_supported("-Wextra")
         .flag_if_supported("-Wno-implicit-fallthrough")
         .flag_if_supported("-Wno-sign-compare")
         .flag_if_supported("-Wno-missing-field-initializers")
