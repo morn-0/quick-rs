@@ -3,6 +3,15 @@ use crate::{
     value::{self, Exception, JSValueRef},
 };
 use quickjs_sys as sys;
+use std::ffi::{c_char, CString};
+
+extern "C" {
+    fn JS_GetModuleExport_real(
+        ctx: *mut sys::JSContext,
+        m: *mut sys::JSModuleDef,
+        export_name: *const c_char,
+    ) -> sys::JSValue;
+}
 
 pub struct Module {
     value: JSValueRef,
@@ -26,6 +35,28 @@ impl Module {
     }
 
     pub fn get(&self, name: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
+        let c_name = match CString::new(name.as_ref()) {
+            Ok(c_name) => c_name,
+            Err(e) => return Err(QuickError::CString(e.to_string())),
+        };
+        let value = unsafe {
+            JS_GetModuleExport_real(
+                self.value.ctx().ptr(),
+                self.value.ptr() as *mut sys::JSModuleDef,
+                c_name.as_ptr() as *const _,
+            )
+        };
+        let value = JSValueRef::from_value(self.value.ctx().clone(), value);
+        if value.tag() == sys::JS_TAG_EXCEPTION {
+            let value = unsafe { sys::JS_GetException(self.value.ctx().ptr()) };
+            let value = JSValueRef::from_value(self.value.ctx().clone(), value);
+            Err(QuickError::Eval(Exception(value).to_string()))
+        } else {
+            Ok(value)
+        }
+    }
+
+    pub fn get_by_namespace(&self, name: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
         let module_ptr = self.value.ptr() as *mut _;
 
         let namespace = unsafe { sys::JS_GetModuleNamespace(self.value.ctx().ptr(), module_ptr) };

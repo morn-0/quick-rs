@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf, process::Command};
 
 const LIB_NAME: &str = "quickjs";
 
@@ -27,6 +27,20 @@ fn main() {
     copy_dir::copy_dir(quickjs, &code_path).unwrap();
 
     fs::copy("static-functions.c", code_path.join("static-functions.c")).unwrap();
+
+    let patch = embed.join("patch");
+    for patch in fs::read_dir(patch).unwrap() {
+        let patch = patch.unwrap().path();
+        Command::new("patch")
+            .current_dir(&code_path)
+            .arg("-i")
+            .arg(patch)
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+
     let sources = [
         "cutils.c",
         "libbf.c",
@@ -52,6 +66,7 @@ fn main() {
 
     cc.files(sources.iter().map(|f| code_path.join(f)))
         .define("_GNU_SOURCE", None)
+        .define("CONFIG_MODULE_EXPORT", None)
         .std("c11");
     cc.flag_if_supported("-Wextra")
         .flag_if_supported("-Wno-implicit-fallthrough")
