@@ -9,6 +9,6 @@ default = []
 [dependencies]
 
 [build-dependencies]
-bindgen = { version = "0.70", default-features = false }
+bindgen = { version = "0.71", features = ["runtime"], default-features = false }
 cc = { version = "1", default-features = false }
 copy_dir = { version = "0.1", default-features = false }
