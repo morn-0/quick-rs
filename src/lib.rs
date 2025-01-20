@@ -39,7 +39,7 @@ main();
     obj.set_property("text", context.make_string("test").unwrap())
         .unwrap();
 
-    context.make_function(Some(obj.clone()), "fibonacci", 2, |ctx, args| {
+    context.make_function(Some(obj.clone()), "fibonacci", 2, |ctx, this, args| {
         // context.make_function(None, "fibonacci", 2, |ctx, args| {
         fn fibonacci(n: u32) -> u64 {
             if n == 0 {
@@ -50,6 +50,8 @@ main();
                 return fibonacci(n - 1) + fibonacci(n - 2);
             }
         }
+
+        println!("{}", this.tag());
 
         let v = fibonacci(args[0].to_i32().unwrap() as u32) as i32;
         let string = args[1].to_string().unwrap();
@@ -77,7 +79,7 @@ export function main(uint8, buffer, text) {
     let value = module.get("main").unwrap();
     let function = Function::new(value);
 
-    // for _ in 0..1000 {
+    // for _ in 0..100 {
     loop {
         let now = std::time::Instant::now();
         let value = function

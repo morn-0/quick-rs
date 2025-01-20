@@ -6,6 +6,7 @@ use crate::{
 use quickjs_sys as sys;
 use std::{
     ffi::{c_double, c_int, c_void, CString},
+    mem,
     ptr::{self, slice_from_raw_parts_mut},
     slice,
 };
@@ -170,32 +171,32 @@ impl Context {
         JSValueRef::from_value(self.clone(), value)
     }
 
-    /// # Memory management
-    /// The `value` callback is transformed into a pointer and is not automatically dropped or deallocated with the destruction of `Context` or `Runtime`. Instead, it persists for the lifetime of the process and will only be reclaimed by the system upon process termination.
-    pub fn make_function<F>(
+    pub fn make_function(
         &self,
         this: Option<JSValueRef>,
         name: impl AsRef<str>,
         args: i32,
-        value: F,
-    ) where
-        F: Fn(Context, Vec<JSValueRef>) -> JSValueRef,
-    {
-        unsafe extern "C" fn inner<F>(
+        value: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef,
+    ) {
+        unsafe extern "C" fn inner(
             ctx: *mut sys::JSContext,
-            _: sys::JSValue,
+            this: sys::JSValue,
             argc: c_int,
             argv: *mut sys::JSValue,
             _: c_int,
             func: *mut sys::JSValue,
-        ) -> sys::JSValue
-        where
-            F: Fn(Context, Vec<JSValueRef>) -> JSValueRef,
-        {
+        ) -> sys::JSValue {
             let ctx = Context(ctx);
 
             let closure = JSValueRef::from_value(ctx.clone(), *func);
-            let closure = &mut *(closure.ptr() as *mut F);
+            let closure: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef = mem::transmute(closure.ptr());
+
+            let this = {
+                let ctx = ctx.clone();
+                let val = value::dup_value(ctx.ptr(), this);
+
+                JSValueRef::from_value(ctx, val)
+            };
 
             let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
             let args: Vec<JSValueRef> = args
@@ -203,29 +204,25 @@ impl Context {
                 .map(|v| JSValueRef::from_value(ctx.clone(), value::dup_value(ctx.ptr(), *v)))
                 .collect();
 
-            let value = closure(ctx.clone(), args);
+            let value = closure(ctx.clone(), this, args);
             let value = value::dup_value(ctx.ptr(), value.val());
 
             std::mem::forget(ctx);
-
             value
         }
 
-        let name = format!("{}\0", name.as_ref());
-
-        let data = Box::into_raw(Box::new(value));
-        let mut data = unsafe { JS_MKPTR_real(sys::JS_TAG_NULL, data as *mut c_void) };
+        let mut data = unsafe { JS_MKPTR_real(sys::JS_TAG_NULL, value as *mut c_void) };
         let data = ptr::addr_of_mut!(data);
 
         unsafe {
-            let func = sys::JS_NewCFunctionData(self.0, Some(inner::<F>), args, 0, 1, data);
-
             let this = match this {
                 Some(v) => value::dup_value(v.ctx().ptr(), v.val()),
                 None => sys::JS_GetGlobalObject(self.0),
             };
-            sys::JS_SetPropertyStr(self.0, this, name.as_ptr() as _, func);
+            let name = format!("{}\0", name.as_ref());
+            let func = sys::JS_NewCFunctionData(self.0, Some(inner), args, 0, 1, data);
 
+            sys::JS_SetPropertyStr(self.0, this, name.as_ptr() as _, func);
             drop(JSValueRef::from_value(self.clone(), this));
         }
     }
