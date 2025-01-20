@@ -112,50 +112,6 @@ impl JSValueRef {
         Ok(())
     }
 
-    pub fn to_bool(&self) -> Result<bool, QuickError> {
-        if self.tag == sys::JS_TAG_BOOL {
-            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) } != 0)
-        } else {
-            Err(QuickError::Type(self.tag))
-        }
-    }
-
-    pub fn to_i32(&self) -> Result<i32, QuickError> {
-        if self.tag == sys::JS_TAG_INT {
-            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) })
-        } else {
-            Err(QuickError::Type(self.tag))
-        }
-    }
-
-    pub fn to_f64(&self) -> Result<f64, QuickError> {
-        if self.tag == sys::JS_TAG_FLOAT64 {
-            Ok(unsafe { JS_VALUE_GET_FLOAT64_real(self.val) })
-        } else {
-            Err(QuickError::Type(self.tag))
-        }
-    }
-
-    pub fn to_string(&self) -> Result<String, QuickError> {
-        if self.tag == sys::JS_TAG_STRING {
-            let (data, len) = unsafe {
-                let mut len = 0;
-                let data = sys::JS_ToCStringLen2(self.ctx.ptr(), &mut len, self.val, 0) as *const _;
-                (data, len)
-            };
-            let buf = unsafe { slice::from_raw_parts(data, len) };
-
-            let string = String::from_utf8_lossy(buf).to_string();
-            unsafe {
-                sys::JS_FreeCString(self.ctx.ptr(), data as *const _);
-            }
-
-            Ok(string)
-        } else {
-            Err(QuickError::Type(self.tag))
-        }
-    }
-
     pub fn to_array(&self) -> Result<Vec<JSValueRef>, QuickError> {
         let length = self.get_property("length")?;
         let length = length.to_i32()?;
@@ -170,6 +126,14 @@ impl JSValueRef {
         }
 
         Ok(array)
+    }
+
+    pub fn to_bool(&self) -> Result<bool, QuickError> {
+        if self.tag == sys::JS_TAG_BOOL {
+            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) } != 0)
+        } else {
+            Err(QuickError::Type(self.tag))
+        }
     }
 
     pub fn to_buffer<T: Number>(&self) -> Result<&[T], QuickError> {
@@ -202,12 +166,48 @@ impl JSValueRef {
         }
     }
 
+    pub fn to_f64(&self) -> Result<f64, QuickError> {
+        if self.tag == sys::JS_TAG_FLOAT64 {
+            Ok(unsafe { JS_VALUE_GET_FLOAT64_real(self.val) })
+        } else {
+            Err(QuickError::Type(self.tag))
+        }
+    }
+
+    pub fn to_i32(&self) -> Result<i32, QuickError> {
+        if self.tag == sys::JS_TAG_INT {
+            Ok(unsafe { JS_VALUE_GET_INT_real(self.val) })
+        } else {
+            Err(QuickError::Type(self.tag))
+        }
+    }
+
     pub fn to_json(&self) -> Result<String, QuickError> {
         let undefined = self.ctx.make_undefined().val();
 
         #[rustfmt::skip]
         let value = unsafe { sys::JS_JSONStringify(self.ctx.ptr(), self.val, undefined, undefined) };
         JSValueRef::from_value(self.ctx.clone(), value).to_string()
+    }
+
+    pub fn to_string(&self) -> Result<String, QuickError> {
+        if self.tag == sys::JS_TAG_STRING {
+            let (data, len) = unsafe {
+                let mut len = 0;
+                let data = sys::JS_ToCStringLen2(self.ctx.ptr(), &mut len, self.val, 0) as *const _;
+                (data, len)
+            };
+            let buf = unsafe { slice::from_raw_parts(data, len) };
+
+            let string = String::from_utf8_lossy(buf).to_string();
+            unsafe {
+                sys::JS_FreeCString(self.ctx.ptr(), data as *const _);
+            }
+
+            Ok(string)
+        } else {
+            Err(QuickError::Type(self.tag))
+        }
     }
 }
 

@@ -106,41 +106,9 @@ impl Context {
         self.0
     }
 
-    pub fn make_undefined(&self) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) };
+    pub fn make_bool(&self, value: bool) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if value { 1 } else { 0 }) };
         JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_null(&self) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_bool(&self, flag: bool) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if flag { 1 } else { 0 }) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_int(&self, value: i32) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_float(&self, value: f64) -> JSValueRef {
-        let value = unsafe { JS_NewFloat64_real(self.0, value) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_string(&self, value: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
-        let value = match CString::new(value.as_ref()) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(QuickError::CString(e.to_string()));
-            }
-        };
-        let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
-
-        Ok(JSValueRef::from_value(self.clone(), value))
     }
 
     pub fn make_buffer(&self, value: impl AsRef<[u8]>) -> Result<JSValueRef, QuickError> {
@@ -166,18 +134,16 @@ impl Context {
         Ok(JSValueRef::from_value(self.clone(), value))
     }
 
-    pub fn make_object(&self) -> JSValueRef {
-        let value = unsafe { sys::JS_NewObject(self.0) };
+    pub fn make_float(&self, value: f64) -> JSValueRef {
+        let value = unsafe { JS_NewFloat64_real(self.0, value) };
         JSValueRef::from_value(self.clone(), value)
     }
 
     pub fn make_function(
         &self,
-        this: Option<JSValueRef>,
-        name: impl AsRef<str>,
-        args: i32,
-        value: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef,
-    ) {
+        argc: i32,
+        call: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef,
+    ) -> JSValueRef {
         unsafe extern "C" fn inner(
             ctx: *mut sys::JSContext,
             this: sys::JSValue,
@@ -189,6 +155,7 @@ impl Context {
             let ctx = Context(ctx);
 
             let closure = JSValueRef::from_value(ctx.clone(), *func);
+            #[rustfmt::skip]
             let closure: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef = mem::transmute(closure.ptr());
 
             let this = {
@@ -201,7 +168,12 @@ impl Context {
             let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
             let args: Vec<JSValueRef> = args
                 .iter()
-                .map(|v| JSValueRef::from_value(ctx.clone(), value::dup_value(ctx.ptr(), *v)))
+                .map(|v| {
+                    let ctx = ctx.clone();
+                    let val = value::dup_value(ctx.ptr(), *v);
+
+                    JSValueRef::from_value(ctx.clone(), val)
+                })
                 .collect();
 
             let value = closure(ctx.clone(), this, args);
@@ -211,19 +183,42 @@ impl Context {
             value
         }
 
-        let mut data = unsafe { JS_MKPTR_real(sys::JS_TAG_NULL, value as *mut c_void) };
+        let mut data = unsafe { JS_MKPTR_real(sys::JS_TAG_NULL, call as *mut c_void) };
         let data = ptr::addr_of_mut!(data);
 
-        unsafe {
-            let this = match this {
-                Some(v) => value::dup_value(v.ctx().ptr(), v.val()),
-                None => sys::JS_GetGlobalObject(self.0),
-            };
-            let name = format!("{}\0", name.as_ref());
-            let func = sys::JS_NewCFunctionData(self.0, Some(inner), args, 0, 1, data);
+        let func = unsafe { sys::JS_NewCFunctionData(self.0, Some(inner), argc, 0, 1, data) };
+        JSValueRef::from_value(self.clone(), func)
+    }
 
-            sys::JS_SetPropertyStr(self.0, this, name.as_ptr() as _, func);
-            drop(JSValueRef::from_value(self.clone(), this));
-        }
+    pub fn make_int(&self, value: i32) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) };
+        JSValueRef::from_value(self.clone(), value)
+    }
+
+    pub fn make_null(&self) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) };
+        JSValueRef::from_value(self.clone(), value)
+    }
+
+    pub fn make_object(&self) -> JSValueRef {
+        let value = unsafe { sys::JS_NewObject(self.0) };
+        JSValueRef::from_value(self.clone(), value)
+    }
+
+    pub fn make_string(&self, value: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
+        let value = match CString::new(value.as_ref()) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(QuickError::CString(e.to_string()));
+            }
+        };
+        let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
+
+        Ok(JSValueRef::from_value(self.clone(), value))
+    }
+
+    pub fn make_undefined(&self) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) };
+        JSValueRef::from_value(self.clone(), value)
     }
 }

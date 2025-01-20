@@ -39,8 +39,7 @@ main();
     obj.set_property("text", context.make_string("test").unwrap())
         .unwrap();
 
-    context.make_function(Some(obj.clone()), "fibonacci", 2, |ctx, this, args| {
-        // context.make_function(None, "fibonacci", 2, |ctx, args| {
+    let func = context.make_function(2, |ctx, this, args| {
         fn fibonacci(n: u32) -> u64 {
             if n == 0 {
                 0
@@ -52,6 +51,10 @@ main();
         }
 
         println!("{}", this.tag());
+        println!(
+            "a: {}",
+            this.get_property("textb").unwrap().to_string().unwrap()
+        );
 
         let v = fibonacci(args[0].to_i32().unwrap() as u32) as i32;
         let string = args[1].to_string().unwrap();
@@ -59,6 +62,7 @@ main();
         println!("{v} {string}");
         ctx.make_int(v)
     });
+    obj.set_property("fibonacci", func).unwrap();
 
     context.global().set_property("obj", obj).unwrap();
 
@@ -66,6 +70,7 @@ main();
 export function main(uint8, buffer, text) {
     uint8[1] = 43;
 
+    obj.textb = "obj_textb";
     return {
         "data": uint8,
         "array": [obj.fibonacci(obj.num, obj.text), 1, "2", text],
