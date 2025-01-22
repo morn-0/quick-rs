@@ -1,4 +1,4 @@
-use crate::context::Context;
+use crate::{context::Context, loader::UserLoader};
 use log::error;
 use quickjs_sys as sys;
 use std::{
@@ -49,14 +49,6 @@ static MF: sys::JSMallocFunctions = sys::JSMallocFunctions {
     js_realloc: Some(rust_realloc),
     js_malloc_usable_size: Some(rust_usable_size),
 };
-
-pub trait UserLoader {
-    fn load(
-        &self,
-        ctx: *mut sys::JSContext,
-        module_name: *const c_char,
-    ) -> Option<*mut sys::JSModuleDef>;
-}
 
 extern "C" fn module_normalize(
     ctx: *mut sys::JSContext,

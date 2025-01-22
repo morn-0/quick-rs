@@ -3,6 +3,7 @@ pub use quickjs_sys as sys;
 pub mod context;
 pub mod error;
 pub mod function;
+pub mod loader;
 pub mod module;
 pub mod runtime;
 pub mod value;
@@ -59,7 +60,7 @@ main();
         let v = fibonacci(args[0].to_i32().unwrap() as u32) as i32;
         let string = args[1].to_string().unwrap();
 
-        println!("{v} {string}");
+        println!("{v}, {string}");
         ctx.make_int(v)
     });
     obj.set_property("fibonacci", func).unwrap();
@@ -70,7 +71,7 @@ main();
 export function main(uint8, buffer, text) {
     uint8[1] = 43;
 
-    obj.textb = "obj_textb";
+    obj.textb = "platform";
     return {
         "data": uint8,
         "array": [obj.fibonacci(obj.num, obj.text), 1, "2", text],
@@ -84,8 +85,8 @@ export function main(uint8, buffer, text) {
     let value = module.get("main").unwrap();
     let function = Function::new(value);
 
-    // for _ in 0..100 {
-    loop {
+    for _ in 0..100 {
+        // loop {
         let now = std::time::Instant::now();
         let value = function
             .call(
@@ -93,7 +94,7 @@ export function main(uint8, buffer, text) {
                 vec![
                     val.clone(),
                     nb.clone(),
-                    context.make_string("test").unwrap(),
+                    context.make_string("testa").unwrap(),
                     context.make_bool(true),
                     context.make_int(32),
                     context.make_object(),
