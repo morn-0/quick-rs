@@ -57,6 +57,7 @@ main();
             this.get_property("textb").unwrap().to_string().unwrap()
         );
 
+        let args = args.unwrap();
         let v = fibonacci(args[0].to_i32().unwrap() as u32) as i32;
         let string = args[1].to_string().unwrap();
 

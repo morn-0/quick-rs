@@ -142,7 +142,7 @@ impl Context {
     pub fn make_function(
         &self,
         argc: i32,
-        call: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef,
+        call: fn(Context, JSValueRef, Option<Vec<JSValueRef>>) -> JSValueRef,
     ) -> JSValueRef {
         unsafe extern "C" fn inner(
             ctx: *mut sys::JSContext,
@@ -156,7 +156,7 @@ impl Context {
 
             let closure = JSValueRef::from_value(ctx.clone(), *func);
             #[rustfmt::skip]
-            let closure: fn(Context, JSValueRef, Vec<JSValueRef>) -> JSValueRef = mem::transmute(closure.ptr());
+            let closure: fn(Context, JSValueRef, Option<Vec<JSValueRef>>) -> JSValueRef = mem::transmute(closure.ptr());
 
             let this = {
                 let ctx = ctx.clone();
@@ -165,16 +165,22 @@ impl Context {
                 JSValueRef::from_value(ctx, val)
             };
 
-            let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
-            let args: Vec<JSValueRef> = args
-                .iter()
-                .map(|v| {
-                    let ctx = ctx.clone();
-                    let val = value::dup_value(ctx.ptr(), *v);
+            let args = if argc == 0 {
+                None
+            } else {
+                let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
+                let args = args
+                    .iter()
+                    .map(|v| {
+                        let ctx = ctx.clone();
+                        let val = value::dup_value(ctx.ptr(), *v);
 
-                    JSValueRef::from_value(ctx.clone(), val)
-                })
-                .collect();
+                        JSValueRef::from_value(ctx.clone(), val)
+                    })
+                    .collect();
+
+                Some(args)
+            };
 
             let value = closure(ctx.clone(), this, args);
             let value = value::dup_value(ctx.ptr(), value.val());
