@@ -18,13 +18,15 @@ pub trait UserLoader {
 }
 
 pub trait ModuleDef {
-    fn name() -> impl AsRef<str>;
     fn export(ctx: Context) -> HashMap<impl AsRef<str>, JSValueRef>;
     fn define() -> HashSet<impl AsRef<str>>;
 }
 
 /// # Safety
-pub unsafe fn init<D>(ctx: *mut sys::JSContext) -> Option<*mut sys::JSModuleDef>
+pub unsafe fn evaluate<D>(
+    ctx: *mut sys::JSContext,
+    name: impl AsRef<str>,
+) -> Option<*mut sys::JSModuleDef>
 where
     D: ModuleDef,
 {
@@ -57,7 +59,7 @@ where
         0
     }
 
-    let name = match CString::new(D::name().as_ref()) {
+    let name = match CString::new(name.as_ref()) {
         Ok(v) => v,
         Err(e) => {
             error!("{e}");
