@@ -11,6 +11,8 @@ fn main() {
     let header = header.to_str().unwrap();
 
     let binding = bindgen::builder()
+        .clang_arg("-v")
+        .clang_arg("-D_BITS_FLOATN_H")
         .header(header)
         .opaque_type("JSValue")
         .allowlist_function("(__)?(JS|js)_.*")
