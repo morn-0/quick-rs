@@ -1,14 +1,13 @@
 use crate::{
     error::QuickError,
     runtime::Runtime,
-    value::{self, Exception, JSValueRef},
+    value::{self, Exception, JSValueRef, Number},
 };
 use quickjs_sys as sys;
 use std::{
     ffi::{c_double, c_int, c_void, CString},
-    mem,
-    ptr::{self, slice_from_raw_parts_mut},
-    slice,
+    mem::{self, ManuallyDrop},
+    ptr, slice,
 };
 
 extern "C" {
@@ -111,26 +110,36 @@ impl Context {
         JSValueRef::from_value(self.clone(), value)
     }
 
-    pub fn make_buffer(&self, value: impl AsRef<[u8]>) -> Result<JSValueRef, QuickError> {
-        unsafe extern "C" fn free(_: *mut sys::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
-            if !opaque.is_null() {
-                let len = ptr::read::<usize>(opaque as *const usize);
-                let ptr = slice_from_raw_parts_mut(ptr as *mut u8, len);
-                drop(Box::from_raw(ptr));
-            }
+    pub fn make_buffer<T: Number + Clone>(
+        &self,
+        value: impl AsRef<[T]>,
+    ) -> Result<JSValueRef, QuickError> {
+        unsafe extern "C" fn free<T>(
+            _: *mut sys::JSRuntime,
+            opaque: *mut c_void,
+            ptr: *mut c_void,
+        ) {
+            let capacity = opaque as usize;
+            let ptr = ptr as *mut T;
+
+            unsafe { Vec::from_raw_parts(ptr, capacity, capacity) };
         }
 
-        let value = value.as_ref();
+        let mut value = ManuallyDrop::new(value.as_ref().to_vec());
 
-        let mut len = value.len();
-        let opaque = if len == 0 {
-            ptr::null_mut()
-        } else {
-            ptr::addr_of_mut!(len)
-        } as *mut c_void;
+        let len = value.len() * size_of::<T>();
+        let opaque = value.capacity();
 
-        let value = Box::into_raw(value.to_owned().into_boxed_slice()) as *mut u8;
-        let value = unsafe { sys::JS_NewArrayBuffer(self.0, value, len, Some(free), opaque, 0) };
+        let value = unsafe {
+            sys::JS_NewArrayBuffer(
+                self.0,
+                value.as_mut_ptr() as _,
+                len,
+                Some(free::<T>),
+                opaque as _,
+                0,
+            )
+        };
         Ok(JSValueRef::from_value(self.clone(), value))
     }
 
