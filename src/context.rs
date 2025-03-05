@@ -84,7 +84,7 @@ impl Context {
             let value = sys::JS_Eval(
                 self.0,
                 c_source.as_ptr(),
-                source.as_ref().len() - 1,
+                source.as_ref().len(),
                 c_name.as_ptr(),
                 flags,
             );
