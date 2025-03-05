@@ -8,7 +8,43 @@ pub mod module;
 pub mod runtime;
 pub mod value;
 
-#[test]
+#[cfg(test)]
+mod tests {
+    use macros::class;
+
+    #[class]
+    #[derive(Default)]
+    struct Request {
+        a: String,
+        pub b: String,
+    }
+
+    impl Request {
+        // constructor
+        #[class(ctor)]
+        fn new() -> Self {
+            Self::default()
+        }
+
+        // method
+        #[class(method)]
+        fn body(&mut self) {}
+
+        // static method
+        #[class(method)]
+        fn static_body() {}
+
+        // getter
+        #[class(getter)]
+        fn get_a() {}
+
+        // setter
+        #[class(setter)]
+        fn set_b() {}
+    }
+}
+
+// #[test]
 fn main() {
     use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
 

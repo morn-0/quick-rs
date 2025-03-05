@@ -110,7 +110,7 @@ impl Context {
         JSValueRef::from_value(self.clone(), value)
     }
 
-    pub fn make_buffer<T: Number + Clone>(
+    pub fn make_buffer<T: Number + Copy>(
         &self,
         value: impl AsRef<[T]>,
     ) -> Result<JSValueRef, QuickError> {
@@ -128,18 +128,10 @@ impl Context {
         let mut value = ManuallyDrop::new(value.as_ref().to_vec());
 
         let len = value.len() * size_of::<T>();
-        let opaque = value.capacity();
+        let opaque = value.capacity() as _;
+        let ptr = value.as_mut_ptr() as _;
 
-        let value = unsafe {
-            sys::JS_NewArrayBuffer(
-                self.0,
-                value.as_mut_ptr() as _,
-                len,
-                Some(free::<T>),
-                opaque as _,
-                0,
-            )
-        };
+        let value = unsafe { sys::JS_NewArrayBuffer(self.0, ptr, len, Some(free::<T>), opaque, 0) };
         Ok(JSValueRef::from_value(self.clone(), value))
     }
 

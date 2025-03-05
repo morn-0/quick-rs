@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["quickjs-sys"]
+members = ["macros", "quickjs-sys"]
 
 [[bin]]
 name = "test"
@@ -15,7 +15,9 @@ default = []
 mimalloc = ["dep:libmimalloc-sys"]
 
 [dependencies]
+macro = { path = "macro" }
 quickjs-sys = { path = "quickjs-sys" }
+
 libmimalloc-sys = { version = "0.1", features = [
     "extended",
 ], default-features = false, optional = true }
