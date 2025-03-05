@@ -83,29 +83,30 @@ impl JSValueRef {
     }
 
     pub fn get_property(&self, prop: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
-        let prop = match CString::new(prop.as_ref()) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(QuickError::CString(format!("{}, {e}", prop.as_ref())));
-            }
+        let atom = unsafe {
+            let ptr = prop.as_ref().as_ptr();
+            let len = prop.as_ref().len();
+
+            sys::JS_NewAtomLen(self.ctx.ptr(), ptr as *const _, len)
         };
-        let value = unsafe { sys::JS_GetPropertyStr(self.ctx.ptr(), self.val, prop.as_ptr()) };
+
+        let value = unsafe { sys::JS_GetProperty(self.ctx.ptr(), self.val, atom) };
         Ok(JSValueRef::from_value(self.ctx.clone(), value))
     }
 
     pub fn set_property(&self, prop: impl AsRef<str>, value: JSValueRef) -> Result<(), QuickError> {
-        let prop = match CString::new(prop.as_ref()) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(QuickError::CString(format!("{}, {e}", prop.as_ref())));
-            }
+        let atom = unsafe {
+            let ptr = prop.as_ref().as_ptr();
+            let len = prop.as_ref().len();
+
+            sys::JS_NewAtomLen(self.ctx.ptr(), ptr as *const _, len)
         };
 
         unsafe {
-            sys::JS_SetPropertyStr(
+            sys::JS_SetProperty(
                 self.ctx.ptr(),
                 self.val,
-                prop.as_ptr(),
+                atom,
                 dup_value(value.ctx().ptr(), value.val()),
             );
         }

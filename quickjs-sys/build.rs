@@ -10,17 +10,27 @@ fn main() {
     let header = quickjs.join("quickjs.h");
     let header = header.to_str().unwrap();
 
-    let binding = bindgen::builder()
-        .clang_arg("-v")
-        .clang_arg("-D_BITS_FLOATN_H")
+    let mut binding = bindgen::builder()
         .header(header)
-        .opaque_type("JSValue")
-        .allowlist_function("(__)?(JS|js)_.*")
-        .allowlist_var("JS_.*")
-        .allowlist_type("JS.*")
+        .clang_arg("-v")
+        .clang_arg("-std=c11")
+        .allowlist_item("(__)?(JS|js)_.*");
+
+    let is_cargo_ndk = env::var("CARGO_NDK_ANDROID_PLATFORM").is_ok();
+    if is_cargo_ndk {
+        let sysroot = env::var("CARGO_NDK_SYSROOT_PATH").unwrap();
+        let target = env::var("TARGET").unwrap();
+
+        binding = binding
+            .clang_arg(format!("--sysroot={sysroot}"))
+            .clang_arg(format!("--target={target}"));
+    }
+
+    binding
         .generate()
+        .unwrap()
+        .write_to_file(out_dir.join("bindings.rs"))
         .unwrap();
-    binding.write_to_file(out_dir.join("bindings.rs")).unwrap();
 
     let code_path = out_dir.join("quickjs");
     if code_path.exists() {
@@ -68,8 +78,8 @@ fn main() {
     cc.files(sources.iter().map(|f| code_path.join(f)))
         .define("_GNU_SOURCE", None)
         .define("CONFIG_MODULE_EXPORT", None)
-        .std("c11");
-    cc.flag_if_supported("-Wextra")
+        .std("c11")
+        .flag_if_supported("-Wextra")
         .flag_if_supported("-Wno-implicit-fallthrough")
         .flag_if_supported("-Wno-sign-compare")
         .flag_if_supported("-Wno-missing-field-initializers")
@@ -80,6 +90,6 @@ fn main() {
         .flag_if_supported("-Wno-format-truncation")
         .flag_if_supported("-Wno-format-zero-length")
         .flag_if_supported("-funsigned-char")
-        .opt_level(2)
+        .opt_level(3)
         .compile(LIB_NAME);
 }
