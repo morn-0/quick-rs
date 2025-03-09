@@ -137,7 +137,7 @@ impl Context {
                 len,
                 Some(free::<T>),
                 opaque as _,
-                0,
+                false,
             )
         };
         Ok(JSValueRef::from_value(self.clone(), value))

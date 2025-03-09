@@ -45,7 +45,3 @@ JSValue JS_NewFloat64_real(JSContext *ctx, double d)
     return JS_NewFloat64(ctx, d);
 }
 
-JSValueConst JS_GetModuleExport_real(JSContext *ctx, JSModuleDef *m, const char *export_name)
-{
-    return JS_GetModuleExport(ctx, m, export_name);
-}

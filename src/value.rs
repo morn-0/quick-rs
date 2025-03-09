@@ -3,7 +3,7 @@ use log::error;
 use quickjs_sys as sys;
 use std::{
     f64,
-    ffi::{c_void, CString},
+    ffi::c_void,
     fmt::Display,
     mem::{self, MaybeUninit},
     slice,
@@ -138,7 +138,7 @@ impl JSValueRef {
     }
 
     pub fn to_buffer<T: Number>(&self) -> Result<&[T], QuickError> {
-        if unsafe { sys::JS_IsArrayBuffer(self.val) == 1 } {
+        if unsafe { sys::JS_IsArrayBuffer(self.val) } {
             let mut size = MaybeUninit::<usize>::uninit();
 
             #[rustfmt::skip]
@@ -153,7 +153,7 @@ impl JSValueRef {
     }
 
     pub fn to_buffer_mut<T: Number>(&mut self) -> Result<&mut [T], QuickError> {
-        if unsafe { sys::JS_IsArrayBuffer(self.val) == 1 } {
+        if unsafe { sys::JS_IsArrayBuffer(self.val) } {
             let mut size = MaybeUninit::<usize>::uninit();
 
             #[rustfmt::skip]
@@ -194,8 +194,10 @@ impl JSValueRef {
     pub fn to_string(&self) -> Result<String, QuickError> {
         if self.tag == sys::JS_TAG_STRING {
             let (data, len) = unsafe {
+                let ptr = self.ctx.ptr();
                 let mut len = 0;
-                let data = sys::JS_ToCStringLen2(self.ctx.ptr(), &mut len, self.val, 0) as *const _;
+
+                let data = sys::JS_ToCStringLen2(ptr, &mut len, self.val, false) as *const _;
                 (data, len)
             };
             let buf = unsafe { slice::from_raw_parts(data, len) };
