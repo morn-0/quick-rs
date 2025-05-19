@@ -41,10 +41,10 @@ fn main() {
     fs::copy("static-functions.c", code_path.join("static-functions.c")).unwrap();
     let sources = [
         "cutils.c",
-        "libbf.c",
         "libregexp.c",
         "libunicode.c",
         "quickjs.c",
+        "xsum.c",
         "static-functions.c",
     ];
 
