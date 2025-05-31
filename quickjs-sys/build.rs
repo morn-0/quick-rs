@@ -7,11 +7,8 @@ fn main() {
     let quickjs = embed.join("quickjs");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let header = quickjs.join("quickjs.h");
-    let header = header.to_str().unwrap();
-
     let mut binding = bindgen::builder()
-        .header(header)
+        .header("wrapper.h")
         .clang_arg("-v")
         .clang_arg("-std=c11")
         .allowlist_item("(__)?(JS|js)_.*");

@@ -19,5 +19,20 @@ quickjs-sys = { path = "quickjs-sys" }
 libmimalloc-sys = { version = "0.1", features = [
     "extended",
 ], default-features = false, optional = true }
+tracing = { version = "0.1", default-features = false }
+anyhow = { version = "1", features = ["std"], default-features = false }
 thiserror = { version = "2", default-features = false }
-log = { version = "0.4", default-features = false }
+rand = { version = "0.9", features = ["thread_rng"], default-features = false }
+flume = { version = "0.11", features = ["async"], default-features = false }
+futures-util = { version = "0.3", features = [
+    "std",
+    "async-await-macro",
+], default-features = false }
+tokio = { version = "1", features = [
+    "macros",
+    "rt",
+    "sync",
+    "time",
+], default-features = false }
+parking_lot = { version = "0.12", default-features = false }
+dashmap = { version = "6", default-features = false }

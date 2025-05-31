@@ -6,14 +6,31 @@ use crate::{
 use quickjs_sys as sys;
 use std::{
     ffi::{c_double, c_int, c_void, CString},
-    mem::{self, ManuallyDrop},
+    mem::{self, ManuallyDrop, MaybeUninit},
     ptr, slice,
 };
+use tracing::error;
+
+const PRELUDE: &str = r#"
+import { setTimeout, clearTimeout } from 'timer'
+globalThis.setTimeout = setTimeout
+globalThis.clearTimeout = clearTimeout
+"#;
 
 extern "C" {
     fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
     fn JS_MKPTR_real(tag: i32, ptr: *mut c_void) -> sys::JSValue;
     fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
+}
+
+pub enum ThrowKind {
+    PlainError(String),
+    SyntaxError(String),
+    TypeError(String),
+    ReferenceError(String),
+    RangeError(String),
+    InternalError(String),
+    OutOfMemory,
 }
 
 pub struct Context(pub(crate) *mut sys::JSContext);
@@ -28,7 +45,14 @@ impl From<&Runtime> for Context {
             ctx
         };
 
-        Context(ctx)
+        let ctx = Context(ctx);
+
+        let flags = sys::JS_EVAL_TYPE_MODULE as _;
+        if let Err(e) = ctx.eval(PRELUDE, "globalThis.mount", flags) {
+            error!("{e}");
+        }
+
+        ctx
     }
 }
 
@@ -47,6 +71,56 @@ impl Drop for Context {
 }
 
 impl Context {
+    pub fn throw(&self, kind: ThrowKind) -> JSValueRef {
+        let value = match kind {
+            ThrowKind::PlainError(fmt) => unsafe {
+                let fmt = match CString::new(fmt) {
+                    Ok(v) => v.into_raw(),
+                    Err(_) => c"PlainError: NulError".as_ptr(),
+                };
+                sys::JS_ThrowPlainError(self.0, fmt)
+            },
+            ThrowKind::SyntaxError(fmt) => unsafe {
+                let fmt = match CString::new(fmt) {
+                    Ok(v) => v.into_raw(),
+                    Err(_) => c"SyntaxError: NulError".as_ptr(),
+                };
+                sys::JS_ThrowSyntaxError(self.0, fmt)
+            },
+            ThrowKind::TypeError(fmt) => unsafe {
+                let fmt = match CString::new(fmt) {
+                    Ok(v) => v.into_raw(),
+                    Err(_) => c"TypeError: NulError".as_ptr(),
+                };
+                sys::JS_ThrowTypeError(self.0, fmt)
+            },
+            ThrowKind::ReferenceError(fmt) => unsafe {
+                let fmt = match CString::new(fmt) {
+                    Ok(v) => v.into_raw(),
+                    Err(_) => c"ReferenceError: NulError".as_ptr(),
+                };
+                sys::JS_ThrowReferenceError(self.0, fmt)
+            },
+            ThrowKind::RangeError(fmt) => unsafe {
+                let fmt = match CString::new(fmt) {
+                    Ok(v) => v.into_raw(),
+                    Err(_) => c"RangeError: NulError".as_ptr(),
+                };
+                sys::JS_ThrowRangeError(self.0, fmt)
+            },
+            ThrowKind::InternalError(fmt) => unsafe {
+                let fmt = match CString::new(fmt) {
+                    Ok(v) => v.into_raw(),
+                    Err(_) => c"InternalError: NulError".as_ptr(),
+                };
+                sys::JS_ThrowInternalError(self.0, fmt)
+            },
+            ThrowKind::OutOfMemory => unsafe { sys::JS_ThrowOutOfMemory(self.0) },
+        };
+
+        JSValueRef::from_value(self.clone(), value)
+    }
+
     pub fn global(&self) -> JSValueRef {
         JSValueRef::from_value(self.clone(), unsafe { sys::JS_GetGlobalObject(self.0) })
     }
@@ -103,6 +177,18 @@ impl Context {
 
     pub fn ptr(&self) -> *mut sys::JSContext {
         self.0
+    }
+
+    pub fn execute_jobs(&self) {
+        loop {
+            let rt = unsafe { sys::JS_GetRuntime(self.0) };
+            let mut ctx = MaybeUninit::uninit();
+
+            let error = unsafe { sys::JS_ExecutePendingJob(rt, ctx.as_mut_ptr()) };
+            if error <= 0 {
+                break;
+            }
+        }
     }
 
     pub fn make_bool(&self, value: bool) -> JSValueRef {
@@ -234,6 +320,11 @@ impl Context {
 
     pub fn make_undefined(&self) -> JSValueRef {
         let value = unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) };
+        JSValueRef::from_value(self.clone(), value)
+    }
+
+    pub fn make_exception(&self) -> JSValueRef {
+        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_EXCEPTION, 0) };
         JSValueRef::from_value(self.clone(), value)
     }
 }

@@ -1,5 +1,4 @@
 use crate::{context::Context, error::QuickError};
-use log::error;
 use quickjs_sys as sys;
 use std::{
     f64,
@@ -8,6 +7,7 @@ use std::{
     mem::{self, MaybeUninit},
     slice,
 };
+use tracing::error;
 
 extern "C" {
     fn JS_VALUE_GET_TAG_real(v: sys::JSValue) -> i32;
@@ -52,6 +52,12 @@ impl Drop for JSValueRef {
         unsafe {
             JS_FreeValue_real(self.ctx.ptr(), self.val);
         }
+    }
+}
+
+impl Display for JSValueRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "tag: {}, ptr: {:p}", self.tag(), self.ptr())
     }
 }
 
@@ -215,6 +221,12 @@ impl JSValueRef {
 }
 
 pub struct Exception(pub JSValueRef);
+
+impl std::fmt::Debug for Exception {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
 
 impl Display for Exception {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

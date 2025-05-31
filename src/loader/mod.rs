@@ -2,12 +2,16 @@ use crate::{
     context::Context,
     value::{self, JSValueRef},
 };
-use log::error;
 use quickjs_sys as sys;
 use std::{
     collections::{HashMap, HashSet},
     ffi::{c_char, c_int, CString},
 };
+use tracing::error;
+
+pub(crate) mod channel;
+pub(crate) mod console;
+pub(crate) mod timer;
 
 pub trait UserLoader {
     fn load(

@@ -39,7 +39,7 @@ impl Function {
             let value = unsafe { sys::JS_GetException(self.value.ctx().ptr()) };
             let value = JSValueRef::from_value(self.value.ctx().clone(), value);
 
-            Err(QuickError::Call(Exception(value).to_string()))
+            Err(QuickError::Call(Exception(value)))
         } else {
             Ok(value)
         }

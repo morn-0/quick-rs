@@ -1,13 +1,34 @@
-use crate::{context::Context, loader::UserLoader};
-use log::error;
+use crate::{
+    context::Context,
+    function::Function,
+    loader::{self, timer::Timer, UserLoader},
+    value::JSValueRef,
+};
+use flume::{Receiver, Sender};
 use quickjs_sys as sys;
 use std::{
+    cell::RefCell,
+    collections::HashMap,
     ffi::{c_char, c_void, CStr},
     fs,
+    future::Future,
     mem::ManuallyDrop,
     path::Path,
+    pin::Pin,
     ptr,
 };
+use tokio::{
+    runtime::Builder,
+    task::{self, LocalSet},
+};
+use tracing::error;
+
+thread_local! {
+    pub(crate) static WAKER: (Sender<Option<i32>>, Receiver<Option<i32>>) = flume::unbounded();
+    pub(crate) static TASK: RefCell<HashMap<i32, (Function, Vec<JSValueRef>)>> = RefCell::new(HashMap::new());
+
+    static IO: tokio::runtime::Runtime = Builder::new_current_thread().enable_all().build().unwrap();
+}
 
 #[cfg(feature = "mimalloc")]
 #[no_mangle]
@@ -42,7 +63,7 @@ extern "C" fn rust_usable_size(ptr: *const c_void) -> usize {
 }
 
 #[cfg(feature = "mimalloc")]
-static MF: sys::JSMallocFunctions = sys::JSMallocFunctions {
+static MIMALLOC: sys::JSMallocFunctions = sys::JSMallocFunctions {
     js_calloc: Some(rust_calloc),
     js_malloc: Some(rust_malloc),
     js_free: Some(rust_free),
@@ -77,6 +98,13 @@ extern "C" fn module_loader(
         .to_string_lossy()
         .to_string();
 
+    if let Some(module) = match module.as_str() {
+        "timer" => unsafe { loader::evaluate::<Timer>(ctx, "timer") },
+        _ => None,
+    } {
+        return module;
+    }
+
     let source = if Path::new(&module).exists() {
         fs::read_to_string(&module).ok()
     } else {
@@ -104,7 +132,7 @@ impl Runtime {
     pub fn new(heap: usize, stack: usize, loader: Option<Box<&mut dyn UserLoader>>) -> Self {
         let rt = unsafe {
             #[cfg(feature = "mimalloc")]
-            let rt = sys::JS_NewRuntime2(&MF as *const _, ptr::null_mut());
+            let rt = sys::JS_NewRuntime2(&MIMALLOC as *const _, ptr::null_mut());
             #[cfg(not(feature = "mimalloc"))]
             let rt = sys::JS_NewRuntime();
 
@@ -126,6 +154,60 @@ impl Runtime {
         };
 
         Self(rt)
+    }
+
+    pub fn event_loop<C, R>(&self, consumer: C, context: Context) -> R
+    where
+        C: FnOnce(Context) -> Pin<Box<dyn Future<Output = R>>> + 'static,
+        R: 'static,
+    {
+        let task = async move {
+            let (sender, receiver) = flume::bounded::<()>(0);
+            let waker = WAKER.with(|v| v.1.clone());
+
+            let result = task::spawn_local({
+                let context = context.clone();
+
+                async move {
+                    let reulst = consumer(context).await;
+                    drop(sender);
+
+                    reulst
+                }
+            });
+
+            loop {
+                futures_util::select! {
+                    task_id = waker.recv_async() => {
+                        let task_id = match task_id {
+                            Ok(v) => v,
+                            Err(_) => break,
+                        };
+
+                        if let Some(task_id) = task_id {
+                            let task = TASK.with(|v| v.borrow_mut().remove(&task_id));
+
+                            if let Some((function, args)) = task {
+                                if let Err(e) = function.call(None, args) {
+                                    error!("task({task_id}), {e}");
+                                }
+                            }
+                        }
+
+                        context.execute_jobs();
+                    },
+                    _ = receiver.recv_async() => {}
+                }
+
+                if TASK.with(|v| v.borrow().is_empty()) {
+                    break;
+                }
+            }
+
+            result.await
+        };
+
+        IO.with(|rt| LocalSet::new().block_on(rt, task).expect("REASON"))
     }
 
     pub fn gc(&self) {

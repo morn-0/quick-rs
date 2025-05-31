@@ -5,6 +5,7 @@ pub mod error;
 pub mod function;
 pub mod loader;
 pub mod module;
+pub mod promise;
 pub mod runtime;
 pub mod value;
 
