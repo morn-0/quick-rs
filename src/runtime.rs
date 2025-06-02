@@ -24,8 +24,8 @@ use tokio::{
 use tracing::error;
 
 thread_local! {
-    pub(crate) static WAKER: (Sender<Option<i32>>, Receiver<Option<i32>>) = flume::unbounded();
-    pub(crate) static TASK: RefCell<HashMap<i32, (Function, Vec<JSValueRef>)>> = RefCell::new(HashMap::new());
+    pub(crate) static WAKER: (Sender<Option<u64>>, Receiver<Option<u64>>) = flume::unbounded();
+    pub(crate) static TASK: RefCell<HashMap<u64, (Function, Vec<JSValueRef>)>> = RefCell::new(HashMap::new());
 
     static IO: tokio::runtime::Runtime = Builder::new_current_thread().enable_all().build().unwrap();
 }
@@ -179,6 +179,7 @@ impl Runtime {
             loop {
                 futures_util::select! {
                     task_id = waker.recv_async() => {
+
                         let task_id = match task_id {
                             Ok(v) => v,
                             Err(_) => break,
@@ -196,7 +197,8 @@ impl Runtime {
 
                         context.execute_jobs();
                     },
-                    _ = receiver.recv_async() => {}
+                    _ = receiver.recv_async() => {
+                    }
                 }
 
                 if TASK.with(|v| v.borrow().is_empty()) {

@@ -11,7 +11,9 @@ pub mod value;
 
 // #[test]
 fn main() {
-    use crate::{context::Context, function::Function, module::Module, runtime::Runtime};
+    use crate::{
+        context::Context, function::Function, module::Module, promise::Promise, runtime::Runtime,
+    };
 
     let runtime = Runtime::default();
     let context = Context::from(&runtime);
@@ -87,8 +89,7 @@ export function main(uint8, buffer, text) {
     let value = module.get("main").unwrap();
     let function = Function::new(value);
 
-    // for _ in 0..100 {
-    loop {
+    for _ in 0..100 {
         let now = std::time::Instant::now();
         let value = function
             .call(
@@ -111,5 +112,69 @@ export function main(uint8, buffer, text) {
             now.elapsed().as_millis(),
             value.to_json().unwrap().len()
         );
+    }
+
+    let value = runtime.event_loop(
+        |ctx| {
+            let function = ctx.make_function(1, |ctx, _, args| {
+                let string = args.unwrap().first().unwrap().to_string().unwrap();
+                println!("{string}");
+                ctx.make_undefined()
+            });
+            ctx.global().set_property("println", function).unwrap();
+            let value = ctx
+                .eval_global(
+                    r#"
+            println("hi")
+
+            setTimeout(() => {
+                println("1000")
+            }, 1000)
+
+            let id = setTimeout(() => {
+                println("3000")
+            }, 3000)
+
+            setTimeout(() => {
+                println("clearTimeout, " + id)
+                clearTimeout(id)
+            }, 2999)
+
+            function sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms))
+            }
+
+            async function main() {
+                for (let i = 0; i < 5; i++) {
+                    await sleep(1000)
+                    println("sleep, " + i)
+                }
+
+                for (let i = 0; i < 10000000; i++) {
+                    setTimeout(() => {
+                        println("setTimeout, " + i)
+                    }, i)
+                }
+
+                return "main done";
+            }
+
+            main()
+            "#,
+                    "event_loop",
+                )
+                .unwrap();
+            Box::pin(Promise::new(value))
+        },
+        context,
+    );
+
+    match value {
+        Ok(v) => {
+            println!("{:?}", v.to_string().unwrap());
+        }
+        Err(e) => {
+            println!("{e}");
+        }
     }
 }

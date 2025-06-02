@@ -9,7 +9,6 @@ use std::{
 };
 use tracing::error;
 
-pub(crate) mod channel;
 pub(crate) mod console;
 pub(crate) mod timer;
 

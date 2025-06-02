@@ -8,6 +8,7 @@ use crate::{
 use heap::{TimerHeap, TimerId};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
 use tracing::error;
@@ -15,6 +16,7 @@ use tracing::error;
 mod heap;
 
 thread_local! {
+    static TASK_ID: AtomicU64 = const { AtomicU64::new(0) };
     static HEAP: TimerHeap = TimerHeap::new();
 }
 
@@ -42,7 +44,7 @@ fn clear_timeout(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> 
 
     if let Some(task_id) = args.pop() {
         let task_id = match task_id.to_i32() {
-            Ok(v) => v,
+            Ok(v) => v as u64,
             Err(_) => {
                 return ctx.make_exception();
             }
@@ -82,7 +84,7 @@ fn set_timeout(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JS
     }
     let delay = Duration::from_millis(delay as u64);
 
-    let task_id = rand::random::<i32>();
+    let task_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
 
     TASK.with(|v| {
         v.borrow_mut().insert(task_id, (function, Vec::from(args)));
@@ -99,5 +101,5 @@ fn set_timeout(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JS
         v.insert_timer(delay, cb);
     });
 
-    ctx.make_int(task_id)
+    ctx.make_int(task_id as i32)
 }
