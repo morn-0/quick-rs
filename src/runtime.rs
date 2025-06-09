@@ -1,7 +1,7 @@
 use crate::{
     context::Context,
     function::Function,
-    loader::{self, timer::Timer, UserLoader},
+    loader::{self, channel::Channel, timer::Timer, UserLoader},
     value::JSValueRef,
 };
 use flume::{Receiver, Sender};
@@ -16,18 +16,21 @@ use std::{
     path::Path,
     pin::Pin,
     ptr,
+    sync::atomic::AtomicU64,
 };
 use tokio::{
-    runtime::Builder,
+    runtime::{Builder, Runtime as TokioRuntime},
     task::{self, LocalSet},
 };
 use tracing::error;
 
 thread_local! {
-    pub(crate) static WAKER: (Sender<Option<u64>>, Receiver<Option<u64>>) = flume::unbounded();
-    pub(crate) static TASK: RefCell<HashMap<u64, (Function, Vec<JSValueRef>)>> = RefCell::new(HashMap::new());
+    pub(crate) static TASK_ID: AtomicU64 = const { AtomicU64::new(0) };
+    pub(crate) static TASK: RefCell<HashMap<u64, Function>> = RefCell::new(HashMap::new());
+    pub(crate) static ARGS: RefCell<HashMap<u64, Vec<JSValueRef>>> = RefCell::new(HashMap::new());
 
-    static IO: tokio::runtime::Runtime = Builder::new_current_thread().enable_all().build().unwrap();
+    pub(crate) static WAKER: (Sender<Option<u64>>, Receiver<Option<u64>>) = flume::unbounded();
+    static IO: TokioRuntime = Builder::new_current_thread().enable_all().build().unwrap();
 }
 
 #[cfg(feature = "mimalloc")]
@@ -100,6 +103,7 @@ extern "C" fn module_loader(
 
     if let Some(module) = match module.as_str() {
         "timer" => unsafe { loader::evaluate::<Timer>(ctx, "timer") },
+        "channel" => unsafe { loader::evaluate::<Channel>(ctx, "channel") },
         _ => None,
     } {
         return module;
@@ -179,7 +183,6 @@ impl Runtime {
             loop {
                 futures_util::select! {
                     task_id = waker.recv_async() => {
-
                         let task_id = match task_id {
                             Ok(v) => v,
                             Err(_) => break,
@@ -187,9 +190,10 @@ impl Runtime {
 
                         if let Some(task_id) = task_id {
                             let task = TASK.with(|v| v.borrow_mut().remove(&task_id));
+                            let args = ARGS.with(|v| v.borrow_mut().remove(&task_id));
 
-                            if let Some((function, args)) = task {
-                                if let Err(e) = function.call(None, args) {
+                            if let Some(function) = task {
+                                if let Err(e) = function.call(None, args.unwrap_or_default()) {
                                     error!("task({task_id}), {e}");
                                 }
                             }
@@ -197,8 +201,7 @@ impl Runtime {
 
                         context.execute_jobs();
                     },
-                    _ = receiver.recv_async() => {
-                    }
+                    _ = receiver.recv_async() => {}
                 }
 
                 if TASK.with(|v| v.borrow().is_empty()) {

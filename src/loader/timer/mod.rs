@@ -2,13 +2,13 @@ use crate::{
     context::{Context, ThrowKind},
     function::Function,
     loader::ModuleDef,
-    runtime::{TASK, WAKER},
+    runtime::{ARGS, TASK, TASK_ID, WAKER},
     value::JSValueRef,
 };
 use heap::{TimerHeap, TimerId};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::Ordering,
     time::Duration,
 };
 use tracing::error;
@@ -16,7 +16,6 @@ use tracing::error;
 mod heap;
 
 thread_local! {
-    static TASK_ID: AtomicU64 = const { AtomicU64::new(0) };
     static HEAP: TimerHeap = TimerHeap::new();
 }
 
@@ -50,13 +49,10 @@ fn clear_timeout(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> 
             }
         };
 
-        HEAP.with(|v| {
-            v.remove_timer(TimerId(task_id));
-        });
+        HEAP.with(|v| v.remove_timer(TimerId(task_id)));
 
-        TASK.with(|v| {
-            v.borrow_mut().remove(&task_id);
-        });
+        TASK.with(|v| v.borrow_mut().remove(&task_id));
+        ARGS.with(|v| v.borrow_mut().remove(&task_id));
     }
 
     ctx.make_undefined()
@@ -85,10 +81,10 @@ fn set_timeout(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JS
     let delay = Duration::from_millis(delay as u64);
 
     let task_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
+    let args = Vec::from(args);
 
-    TASK.with(|v| {
-        v.borrow_mut().insert(task_id, (function, Vec::from(args)));
-    });
+    TASK.with(|v| v.borrow_mut().insert(task_id, function));
+    ARGS.with(|v| v.borrow_mut().insert(task_id, args));
 
     HEAP.with(|v| {
         let cb = async move {

@@ -122,6 +122,7 @@ export function main(uint8, buffer, text) {
                 ctx.make_undefined()
             });
             ctx.global().set_property("println", function).unwrap();
+
             let value = ctx
                 .eval_global(
                     r#"
@@ -135,22 +136,54 @@ export function main(uint8, buffer, text) {
                 println("3000")
             }, 3000)
 
-            setTimeout(() => {
+            setTimeout(async () => {
+                let i = await recv("loop")
+                println("recv, " + i)
                 println("clearTimeout, " + id)
                 clearTimeout(id)
+                await send("test channel", "setTimeout test channel")
+                println("5.send")
             }, 2999)
+            send("test channel", "test channel")
+
+            setTimeout(async () => {
+                let i = 0;
+                while (i <= 100) {
+                    await send("loop", "send, " + i)
+                    await sleep(1)
+                    i += 1
+                }
+            }, 10)
+            setTimeout(async () => {
+                while (true) {
+                    let i = await recv("loop")
+                    println("recv, " + i)
+
+                    if (i.indexOf("100") != -1) {
+                        break
+                    }
+                }
+            }, 3000)
 
             function sleep(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms))
             }
 
             async function main() {
+                println("recv, " + await recv("test channel"))
+                println("recv, " + await recv("test channel"))
+
+                setTimeout(async () => {
+                    println("before recv")
+                    println("after recv")
+                }, 3000)
+
                 for (let i = 0; i < 5; i++) {
                     await sleep(1000)
                     println("sleep, " + i)
                 }
 
-                for (let i = 0; i < 10000000; i++) {
+                for (let i = 0; i < 10000; i++) {
                     setTimeout(() => {
                         println("setTimeout, " + i)
                     }, i)
@@ -164,6 +197,19 @@ export function main(uint8, buffer, text) {
                     "event_loop",
                 )
                 .unwrap();
+
+            tokio::task::spawn_local(async move {
+                let send = Function::new(ctx.global().get_property("send").unwrap());
+                let v = send
+                    .call(
+                        None,
+                        vec![ctx.make_string("loop").unwrap(), ctx.make_int(123456789)],
+                    )
+                    .unwrap();
+                Promise::new(v).await;
+                println!("loop ======================");
+            });
+
             Box::pin(Promise::new(value))
         },
         context,

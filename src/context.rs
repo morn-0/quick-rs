@@ -15,6 +15,10 @@ const PRELUDE: &str = r#"
 import { setTimeout, clearTimeout } from 'timer'
 globalThis.setTimeout = setTimeout
 globalThis.clearTimeout = clearTimeout
+
+import { send, recv } from 'channel'
+globalThis.send = send
+globalThis.recv = recv
 "#;
 
 extern "C" {

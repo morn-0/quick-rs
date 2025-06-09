@@ -9,7 +9,7 @@ use std::{
 };
 use tracing::error;
 
-pub(crate) mod console;
+pub(crate) mod channel;
 pub(crate) mod timer;
 
 pub trait UserLoader {

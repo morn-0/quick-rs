@@ -1,4 +1,4 @@
-use flume::{Receiver, Sender};
+use flume::{unbounded, Receiver, Sender};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap},
@@ -77,7 +77,7 @@ pub struct TimerHeap {
 
 impl TimerHeap {
     pub fn new() -> Self {
-        let (tx, rx) = flume::unbounded::<Command>();
+        let (tx, rx) = unbounded::<Command>();
         let id_counter = Arc::new(AtomicU64::new(0));
 
         task::spawn_local(Self::run(rx));
@@ -280,4 +280,3 @@ impl Default for TimerHeap {
         Self::new()
     }
 }
-
