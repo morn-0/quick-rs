@@ -102,7 +102,6 @@ unsafe extern "C" fn resolve(
     let ctx = ManuallyDrop::new(crate::context::Context(ctx));
 
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
-    let state = ManuallyDrop::new(state);
 
     let Some(state) = state.upgrade() else {
         return ctx.make_undefined().val();
@@ -139,7 +138,6 @@ unsafe extern "C" fn reject(
     let ctx = ManuallyDrop::new(crate::context::Context(ctx));
 
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
-    let state = ManuallyDrop::new(state);
 
     let Some(state) = state.upgrade() else {
         return ctx.make_undefined().val();

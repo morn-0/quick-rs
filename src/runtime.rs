@@ -89,12 +89,15 @@ extern "C" fn module_loader(
     opaque: *mut c_void,
 ) -> *mut sys::JSModuleDef {
     if !opaque.is_null() {
-        let loader = unsafe { Box::from_raw(opaque as *mut &mut dyn UserLoader) };
-        let loader = ManuallyDrop::new(loader);
+        let loader = unsafe { &mut *(opaque as *mut &mut dyn UserLoader) };
 
         if let Some(module) = loader.load(ctx, module) {
             return module;
         }
+    }
+
+    if module.is_null() {
+        return ptr::null_mut();
     }
 
     let module = unsafe { CStr::from_ptr(module) }
@@ -173,6 +176,8 @@ impl Runtime {
                 let context = context.clone();
 
                 async move {
+                    context.execute_jobs();
+
                     let reulst = consumer(context).await;
                     drop(sender);
 
@@ -199,10 +204,11 @@ impl Runtime {
                             }
                         }
 
-                        context.execute_jobs();
                     },
                     _ = receiver.recv_async() => {}
                 }
+
+                context.execute_jobs();
 
                 if TASK.with(|v| v.borrow().is_empty()) {
                     break;

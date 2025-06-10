@@ -61,7 +61,7 @@ fn send(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JSValueRe
     let sender = CHANNEL.with(|v| {
         v.borrow_mut()
             .entry(topic.clone())
-            .or_insert(flume::bounded(64))
+            .or_insert(flume::bounded(8))
             .0
             .clone()
     });
@@ -114,7 +114,7 @@ fn recv(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JSValueRe
     let receiver = CHANNEL.with(|v| {
         v.borrow_mut()
             .entry(topic)
-            .or_insert(flume::bounded(64))
+            .or_insert(flume::bounded(8))
             .1
             .clone()
     });

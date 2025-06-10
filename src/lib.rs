@@ -114,15 +114,18 @@ export function main(uint8, buffer, text) {
         );
     }
 
+    let function = context.make_function(1, |ctx, _, args| {
+        let string = args.unwrap().first().unwrap().to_string().unwrap();
+        println!("{string}");
+        ctx.make_undefined()
+    });
+    context.global().set_property("println", function).unwrap();
+
+    context
+        .eval_global("Promise.resolve(\"42\").then(println);", "test")
+        .unwrap();
     let value = runtime.event_loop(
         |ctx| {
-            let function = ctx.make_function(1, |ctx, _, args| {
-                let string = args.unwrap().first().unwrap().to_string().unwrap();
-                println!("{string}");
-                ctx.make_undefined()
-            });
-            ctx.global().set_property("println", function).unwrap();
-
             let value = ctx
                 .eval_global(
                     r#"
@@ -148,9 +151,9 @@ export function main(uint8, buffer, text) {
 
             setTimeout(async () => {
                 let i = 0;
-                while (i <= 100) {
+                while (i <= 10000) {
                     await send("loop", "send, " + i)
-                    await sleep(1)
+                    // await sleep(1)
                     i += 1
                 }
             }, 10)
@@ -159,7 +162,7 @@ export function main(uint8, buffer, text) {
                     let i = await recv("loop")
                     println("recv, " + i)
 
-                    if (i.indexOf("100") != -1) {
+                    if (i.indexOf("10000") != -1) {
                         break
                     }
                 }
@@ -178,10 +181,10 @@ export function main(uint8, buffer, text) {
                     println("after recv")
                 }, 3000)
 
-                for (let i = 0; i < 5; i++) {
-                    await sleep(1000)
-                    println("sleep, " + i)
-                }
+                // for (let i = 0; i < 5; i++) {
+                //     await sleep(1000)
+                //     println("sleep, " + i)
+                // }
 
                 for (let i = 0; i < 10000; i++) {
                     setTimeout(() => {
