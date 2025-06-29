@@ -83,7 +83,7 @@ fn set_timeout(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JS
     let task_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
     let args = Vec::from(args);
 
-    TASK.with(|v| v.borrow_mut().insert(task_id, function));
+    TASK.with(|v| v.borrow_mut().insert(task_id, (function, None)));
     ARGS.with(|v| v.borrow_mut().insert(task_id, args));
 
     HEAP.with(|v| {

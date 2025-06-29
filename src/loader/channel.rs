@@ -69,10 +69,12 @@ fn send(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JSValueRe
     let (promise, resolve, reject) = make_promise(ctx);
 
     let resolve_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
-    TASK.with(|v| v.borrow_mut().insert(resolve_id, Function::new(resolve)));
+    let task = (Function::new(resolve), None);
+    TASK.with(|v| v.borrow_mut().insert(resolve_id, task));
 
     let reject_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
-    TASK.with(|v| v.borrow_mut().insert(reject_id, Function::new(reject)));
+    let task = (Function::new(reject), None);
+    TASK.with(|v| v.borrow_mut().insert(reject_id, task));
 
     task::spawn_local(async move {
         let task_id = match sender.send_async(value).await {
@@ -122,10 +124,12 @@ fn recv(ctx: Context, _: JSValueRef, args: Option<Vec<JSValueRef>>) -> JSValueRe
     let (promise, resolve, reject) = make_promise(ctx);
 
     let resolve_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
-    TASK.with(|v| v.borrow_mut().insert(resolve_id, Function::new(resolve)));
+    let task = (Function::new(resolve), None);
+    TASK.with(|v| v.borrow_mut().insert(resolve_id, task));
 
     let reject_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
-    TASK.with(|v| v.borrow_mut().insert(reject_id, Function::new(reject)));
+    let task = (Function::new(reject), None);
+    TASK.with(|v| v.borrow_mut().insert(reject_id, task));
 
     task::spawn_local(async move {
         let task_id = match receiver.recv_async().await {

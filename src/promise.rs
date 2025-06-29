@@ -1,7 +1,6 @@
 use crate::{
-    error::QuickError,
     function::Function,
-    runtime::WAKER,
+    runtime::{ARGS, TASK, TASK_ID, WAKER},
     value::{self, JSValueRef},
 };
 use parking_lot::Mutex;
@@ -14,7 +13,7 @@ use std::{
     pin::Pin,
     rc::Rc,
     slice,
-    sync::Weak,
+    sync::{atomic::Ordering, Weak},
     task::{Context, Poll, Waker},
 };
 use tracing::error;
@@ -75,15 +74,14 @@ impl Future for Promise {
                     JSValueRef::from_value(ctx, reject)
                 };
 
-                if let Err(QuickError::Call(e)) = then.call(Some(value), vec![resolve, reject]) {
-                    error!("{e}");
-                    return Poll::Ready(Ok(self.value.ctx().make_undefined()));
-                }
-            }
+                let then_id = TASK_ID.with(|v| v.fetch_add(1, Ordering::Relaxed));
+                TASK.with(|v| v.borrow_mut().insert(then_id, (then, Some(value))));
+                ARGS.with(|v| v.borrow_mut().insert(then_id, vec![resolve, reject]));
 
-            let waker = WAKER.with(|v| v.0.clone());
-            if let Err(e) = waker.send(None) {
-                error!("{e}");
+                let waker = WAKER.with(|v| v.0.clone());
+                if let Err(e) = waker.send(Some(then_id)) {
+                    error!("{e}");
+                }
             }
         }
 
@@ -102,6 +100,7 @@ unsafe extern "C" fn resolve(
     let ctx = ManuallyDrop::new(crate::context::Context(ctx));
 
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
+    let state = ManuallyDrop::new(state);
 
     let Some(state) = state.upgrade() else {
         return ctx.make_undefined().val();
@@ -138,6 +137,7 @@ unsafe extern "C" fn reject(
     let ctx = ManuallyDrop::new(crate::context::Context(ctx));
 
     let state = Box::from_raw(data as *mut Weak<Mutex<PromiseState>>);
+    let state = ManuallyDrop::new(state);
 
     let Some(state) = state.upgrade() else {
         return ctx.make_undefined().val();

@@ -13,12 +13,12 @@ impl Function {
         Function { value }
     }
 
-    pub fn call(
-        &self,
-        this: Option<JSValueRef>,
+    pub fn call<'a>(
+        &'a self,
+        this: Option<&'a JSValueRef>,
         args: Vec<JSValueRef>,
     ) -> Result<JSValueRef, QuickError> {
-        let this_raw = match &this {
+        let this_raw = match this {
             Some(v) => v.val(),
             None => self.value.ctx().make_undefined().val(),
         };

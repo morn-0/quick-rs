@@ -201,7 +201,7 @@ export function main(uint8, buffer, text) {
                 )
                 .unwrap();
 
-            tokio::task::spawn_local(async move {
+            let task = async move {
                 let send = Function::new(ctx.global().get_property("send").unwrap());
                 let v = send
                     .call(
@@ -211,9 +211,10 @@ export function main(uint8, buffer, text) {
                     .unwrap();
                 Promise::new(v).await;
                 println!("loop ======================");
-            });
+                Promise::new(value).await
+            };
 
-            Box::pin(Promise::new(value))
+            Box::pin(task)
         },
         context,
     );

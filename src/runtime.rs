@@ -24,10 +24,11 @@ use tokio::{
 };
 use tracing::error;
 
+type Task = (Function, Option<JSValueRef>);
 thread_local! {
     pub(crate) static TASK_ID: AtomicU64 = const { AtomicU64::new(0) };
-    pub(crate) static TASK: RefCell<HashMap<u64, Function>> = RefCell::new(HashMap::new());
     pub(crate) static ARGS: RefCell<HashMap<u64, Vec<JSValueRef>>> = RefCell::new(HashMap::new());
+    pub(crate) static TASK: RefCell<HashMap<u64, Task>> = RefCell::new(HashMap::new());
 
     pub(crate) static WAKER: (Sender<Option<u64>>, Receiver<Option<u64>>) = flume::unbounded();
     static IO: TokioRuntime = Builder::new_current_thread().enable_all().build().unwrap();
@@ -169,43 +170,30 @@ impl Runtime {
         R: 'static,
     {
         let task = async move {
-            let (sender, receiver) = flume::bounded::<()>(0);
+            context.execute_jobs();
+            let spawn = task::spawn_local(consumer(context.clone()));
+
             let waker = WAKER.with(|v| v.1.clone());
-
-            let result = task::spawn_local({
-                let context = context.clone();
-
-                async move {
-                    context.execute_jobs();
-
-                    let reulst = consumer(context).await;
-                    drop(sender);
-
-                    reulst
-                }
-            });
-
             loop {
-                futures_util::select! {
-                    task_id = waker.recv_async() => {
-                        let task_id = match task_id {
-                            Ok(v) => v,
-                            Err(_) => break,
-                        };
+                let task_id = match waker.recv_async().await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{e}");
+                        break;
+                    }
+                };
 
-                        if let Some(task_id) = task_id {
-                            let task = TASK.with(|v| v.borrow_mut().remove(&task_id));
-                            let args = ARGS.with(|v| v.borrow_mut().remove(&task_id));
+                if let Some(task_id) = task_id {
+                    let task = TASK.with(|v| v.borrow_mut().remove(&task_id));
+                    let args = ARGS.with(|v| v.borrow_mut().remove(&task_id));
 
-                            if let Some(function) = task {
-                                if let Err(e) = function.call(None, args.unwrap_or_default()) {
-                                    error!("task({task_id}), {e}");
-                                }
-                            }
+                    if let Some((function, this)) = task {
+                        let args = args.unwrap_or_default();
+
+                        if let Err(e) = function.call(this.as_ref(), args) {
+                            error!("task({task_id}), {e}");
                         }
-
-                    },
-                    _ = receiver.recv_async() => {}
+                    }
                 }
 
                 context.execute_jobs();
@@ -215,7 +203,7 @@ impl Runtime {
                 }
             }
 
-            result.await
+            spawn.await
         };
 
         IO.with(|rt| LocalSet::new().block_on(rt, task).expect("REASON"))
