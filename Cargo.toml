@@ -6,13 +6,10 @@ edition = "2021"
 [workspace]
 members = ["quickjs-sys"]
 
-[[bin]]
-name = "test"
-path = "src/lib.rs"
-
 [features]
-default = []
+default = ["mimalloc", "async"]
 mimalloc = ["dep:libmimalloc-sys"]
+async = ["dep:futures-util", "dep:futures-timer"]
 
 [dependencies]
 quickjs-sys = { path = "quickjs-sys" }
@@ -21,3 +18,24 @@ libmimalloc-sys = { version = "0.1", features = [
 ], default-features = false, optional = true }
 thiserror = { version = "2", default-features = false }
 log = { version = "0.4", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = [
+    "std",
+], optional = true }
+futures-timer = { version = "3", default-features = false, optional = true }
+
+# 仅测试用：成熟的异步运行时，用来 block_on 驱动 run_until（单线程，适配 !Send）。
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "macros"] }
+criterion = { version = "0.5", default-features = false, features = [
+    "cargo_bench_support",
+] }
+# 火焰图：信号采样剖析器，--profile-time 时给每个基准输出 flamegraph.svg（无需 perf/root）。
+pprof = { version = "0.14", features = ["flamegraph", "criterion"] }
+
+[[bench]]
+name = "quickjs"
+harness = false
+
+# bench 默认 release，无符号；加 debug 让火焰图能符号化栈帧。
+[profile.bench]
+debug = true

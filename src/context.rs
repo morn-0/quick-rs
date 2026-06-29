@@ -1,71 +1,57 @@
 use crate::{
-    error::QuickError,
+    error::{Error, Exception},
     runtime::Runtime,
-    value::{self, Exception, JSValueRef, Number},
+    value::{self, Number, Value},
 };
 use quickjs_sys as sys;
 use std::{
-    ffi::{c_double, c_int, c_void, CString},
-    mem::{self, ManuallyDrop},
-    ptr, slice,
+    ffi::{c_int, c_void, CString},
+    mem::ManuallyDrop,
+    rc::{Rc, Weak},
 };
 
-extern "C" {
-    fn JS_MKVAL_real(tag: i32, val: i32) -> sys::JSValue;
-    fn JS_MKPTR_real(tag: i32, ptr: *mut c_void) -> sys::JSValue;
-    fn JS_NewFloat64_real(ctx: *mut sys::JSContext, val: c_double) -> sys::JSValue;
+pub(crate) struct ContextInner {
+    raw: *mut sys::JSContext,
+    rt: Runtime,
 }
 
-pub struct Context(pub(crate) *mut sys::JSContext);
-
-impl From<&Runtime> for Context {
-    fn from(value: &Runtime) -> Self {
-        let ctx = unsafe {
-            let ctx = sys::JS_NewContext(value.0);
-
-            sys::JS_AddIntrinsicRegExpCompiler(ctx);
-
-            ctx
-        };
-
-        Context(ctx)
-    }
-}
-
-impl Clone for Context {
-    fn clone(&self) -> Self {
-        Context(unsafe { sys::JS_DupContext(self.0) })
-    }
-}
-
-impl Drop for Context {
+impl Drop for ContextInner {
     fn drop(&mut self) {
         unsafe {
-            sys::JS_FreeContext(self.0);
+            let opaque = sys::JS_GetContextOpaque(self.raw);
+            if !opaque.is_null() {
+                drop(Weak::from_raw(opaque as *const ContextInner));
+            }
+            sys::JS_FreeContext(self.raw);
         }
     }
 }
 
+#[derive(Clone)]
+pub struct Context(Rc<ContextInner>);
+
 impl Context {
-    pub fn global(&self) -> JSValueRef {
-        JSValueRef::from_value(self.clone(), unsafe { sys::JS_GetGlobalObject(self.0) })
+    pub(crate) fn new(rt: Runtime) -> Self {
+        let raw = unsafe {
+            let raw = sys::JS_NewContext(rt.as_raw());
+            sys::JS_AddIntrinsicRegExpCompiler(raw);
+            raw
+        };
+        let inner = Rc::new(ContextInner { raw, rt });
+
+        let weak = Rc::downgrade(&inner);
+        unsafe { sys::JS_SetContextOpaque(raw, Weak::into_raw(weak) as *mut c_void) };
+
+        Context(inner)
     }
 
-    pub fn eval_module(
-        &self,
-        source: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> Result<JSValueRef, QuickError> {
-        const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY) as i32;
-        self.eval(source, name, FLAGS)
+    pub fn runtime(&self) -> &Runtime {
+        &self.0.rt
     }
 
-    pub fn eval_global(
-        &self,
-        source: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> Result<JSValueRef, QuickError> {
-        self.eval(source, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
+    pub fn global(&self) -> Value {
+        let raw = unsafe { sys::JS_GetGlobalObject(self.as_raw()) };
+        Value::from_raw(self.clone(), raw)
     }
 
     pub fn eval(
@@ -73,167 +59,184 @@ impl Context {
         source: impl AsRef<str>,
         name: impl AsRef<str>,
         flags: i32,
-    ) -> Result<JSValueRef, QuickError> {
-        let (c_source, c_name) = match (CString::new(source.as_ref()), CString::new(name.as_ref()))
-        {
-            (Ok(a), Ok(b)) => (a, b),
-            _ => return Err(QuickError::CString(source.as_ref().to_string())),
-        };
-
-        unsafe {
-            let value = sys::JS_Eval(
-                self.0,
+    ) -> Result<Value, Error> {
+        let source = source.as_ref();
+        let c_source = CString::new(source).map_err(|_| Error::NulString)?;
+        let c_name = CString::new(name.as_ref()).map_err(|_| Error::NulString)?;
+        let raw = unsafe {
+            sys::JS_Eval(
+                self.as_raw(),
                 c_source.as_ptr(),
-                source.as_ref().len(),
+                source.len(),
                 c_name.as_ptr(),
                 flags,
-            );
-            let value = JSValueRef::from_value(self.clone(), value);
-
-            if value.tag() == sys::JS_TAG_EXCEPTION {
-                let value = sys::JS_GetException(self.0);
-                let value = JSValueRef::from_value(self.clone(), value);
-
-                Err(QuickError::Eval(Exception(value).to_string()))
-            } else {
-                Ok(value)
-            }
-        }
+            )
+        };
+        self.check(Value::from_raw(self.clone(), raw))
     }
 
-    pub fn ptr(&self) -> *mut sys::JSContext {
-        self.0
-    }
-
-    pub fn make_bool(&self, value: bool) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_BOOL, if value { 1 } else { 0 }) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_buffer<T: Number + Clone>(
+    pub fn eval_global(
         &self,
-        value: impl AsRef<[T]>,
-    ) -> Result<JSValueRef, QuickError> {
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<Value, Error> {
+        self.eval(source, name, sys::JS_EVAL_TYPE_GLOBAL as i32)
+    }
+
+    pub fn eval_module(
+        &self,
+        source: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<Value, Error> {
+        const FLAGS: i32 = (sys::JS_EVAL_TYPE_MODULE | sys::JS_EVAL_FLAG_COMPILE_ONLY) as i32;
+        self.eval(source, name, FLAGS)
+    }
+
+    pub fn make_bool(&self, value: bool) -> Value {
+        Value::from_raw(self.clone(), value::mkval(sys::JS_TAG_BOOL, value as i32))
+    }
+
+    pub fn make_int(&self, value: i32) -> Value {
+        Value::from_raw(self.clone(), value::mkval(sys::JS_TAG_INT, value))
+    }
+
+    pub fn make_float(&self, value: f64) -> Value {
+        Value::from_raw(self.clone(), value::new_float64(self.as_raw(), value))
+    }
+
+    pub fn make_null(&self) -> Value {
+        Value::from_raw(self.clone(), value::mkval(sys::JS_TAG_NULL, 0))
+    }
+
+    pub fn make_undefined(&self) -> Value {
+        Value::from_raw(self.clone(), value::mkval(sys::JS_TAG_UNDEFINED, 0))
+    }
+
+    pub fn make_object(&self) -> Value {
+        Value::from_raw(self.clone(), unsafe { sys::JS_NewObject(self.as_raw()) })
+    }
+
+    pub fn make_array(&self, values: impl IntoIterator<Item = Value>) -> Value {
+        let raws: Vec<sys::JSValue> = values.into_iter().map(Value::into_raw).collect();
+        let raw =
+            unsafe { sys::JS_NewArrayFrom(self.as_raw(), raws.len() as c_int, raws.as_ptr()) };
+        Value::from_raw(self.clone(), raw)
+    }
+
+    pub fn make_string(&self, value: impl AsRef<str>) -> Result<Value, Error> {
+        let str = value.as_ref();
+        let raw = unsafe { sys::JS_NewStringLen(self.as_raw(), str.as_ptr().cast(), str.len()) };
+        self.check(Value::from_raw(self.clone(), raw))
+    }
+
+    pub fn make_buffer<T: Number + Clone>(&self, data: impl AsRef<[T]>) -> Result<Value, Error> {
         unsafe extern "C" fn free<T>(
             _: *mut sys::JSRuntime,
             opaque: *mut c_void,
             ptr: *mut c_void,
         ) {
             let capacity = opaque as usize;
-            let ptr = ptr as *mut T;
-
-            unsafe { Vec::from_raw_parts(ptr, capacity, capacity) };
+            drop(unsafe { Vec::from_raw_parts(ptr.cast::<T>(), capacity, capacity) });
         }
 
-        let mut value = ManuallyDrop::new(value.as_ref().to_vec());
+        let mut buf = ManuallyDrop::new(data.as_ref().to_vec());
+        let len = buf.len() * std::mem::size_of::<T>();
+        let cap = buf.capacity();
 
-        let len = value.len() * size_of::<T>();
-        let opaque = value.capacity();
-
-        let value = unsafe {
+        let raw = unsafe {
             sys::JS_NewArrayBuffer(
-                self.0,
-                value.as_mut_ptr() as _,
+                self.as_raw(),
+                buf.as_mut_ptr().cast::<u8>(),
                 len,
                 Some(free::<T>),
-                opaque as _,
+                cap as *mut c_void,
                 false,
             )
         };
-        Ok(JSValueRef::from_value(self.clone(), value))
+        self.check(Value::from_raw(self.clone(), raw))
     }
 
-    pub fn make_float(&self, value: f64) -> JSValueRef {
-        let value = unsafe { JS_NewFloat64_real(self.0, value) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_function(
-        &self,
-        argc: i32,
-        call: fn(Context, JSValueRef, Option<Vec<JSValueRef>>) -> JSValueRef,
-    ) -> JSValueRef {
-        unsafe extern "C" fn inner(
-            ctx: *mut sys::JSContext,
-            this: sys::JSValue,
-            argc: c_int,
-            argv: *mut sys::JSValue,
-            _: c_int,
-            func: *mut sys::JSValue,
-        ) -> sys::JSValue {
-            let ctx = Context(ctx);
-
-            let closure = JSValueRef::from_value(ctx.clone(), *func);
-            #[rustfmt::skip]
-            let closure: fn(Context, JSValueRef, Option<Vec<JSValueRef>>) -> JSValueRef = mem::transmute(closure.ptr());
-
-            let this = {
-                let ctx = ctx.clone();
-                let val = value::dup_value(ctx.ptr(), this);
-
-                JSValueRef::from_value(ctx, val)
-            };
-
-            let args = if argc == 0 {
-                None
-            } else {
-                let args = unsafe { slice::from_raw_parts_mut(argv, argc as usize) };
-                let args = args
-                    .iter()
-                    .map(|v| {
-                        let ctx = ctx.clone();
-                        let val = value::dup_value(ctx.ptr(), *v);
-
-                        JSValueRef::from_value(ctx.clone(), val)
-                    })
-                    .collect();
-
-                Some(args)
-            };
-
-            let value = closure(ctx.clone(), this, args);
-            let value = value::dup_value(ctx.ptr(), value.val());
-
-            std::mem::forget(ctx);
-            value
+    pub(crate) fn check(&self, value: Value) -> Result<Value, Error> {
+        if value.tag() == sys::JS_TAG_EXCEPTION {
+            Err(Error::Exception(self.catch()))
+        } else {
+            Ok(value)
         }
-
-        let mut data = unsafe { JS_MKPTR_real(sys::JS_TAG_NULL, call as *mut c_void) };
-        let data = ptr::addr_of_mut!(data);
-
-        let func = unsafe { sys::JS_NewCFunctionData(self.0, Some(inner), argc, 0, 1, data) };
-        JSValueRef::from_value(self.clone(), func)
     }
 
-    pub fn make_int(&self, value: i32) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_INT, value) };
-        JSValueRef::from_value(self.clone(), value)
-    }
+    pub(crate) fn catch(&self) -> Exception {
+        let raw = unsafe { sys::JS_GetException(self.as_raw()) };
+        let value = Value::from_raw(self.clone(), raw);
+        let value = value.borrow();
 
-    pub fn make_null(&self) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_NULL, 0) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_object(&self) -> JSValueRef {
-        let value = unsafe { sys::JS_NewObject(self.0) };
-        JSValueRef::from_value(self.clone(), value)
-    }
-
-    pub fn make_string(&self, value: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
-        let value = match CString::new(value.as_ref()) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(QuickError::CString(e.to_string()));
+        let field = |key: &str| {
+            let v = value.get_property_raw(key);
+            if v.tag() == sys::JS_TAG_UNDEFINED || v.tag() == sys::JS_TAG_NULL {
+                String::new()
+            } else {
+                v.borrow().to_string().unwrap_or_default()
             }
         };
-        let value = unsafe { sys::JS_NewStringLen(self.0, value.as_ptr(), value.as_bytes().len()) };
 
-        Ok(JSValueRef::from_value(self.clone(), value))
+        let name = field("name");
+        let mut message = field("message");
+        let stack = field("stack");
+
+        if name.is_empty() && message.is_empty() {
+            message = value.to_string().unwrap_or_default();
+        }
+
+        Exception {
+            name,
+            message,
+            stack,
+        }
     }
 
-    pub fn make_undefined(&self) -> JSValueRef {
-        let value = unsafe { JS_MKVAL_real(sys::JS_TAG_UNDEFINED, 0) };
-        JSValueRef::from_value(self.clone(), value)
+    pub(crate) fn throw(&self, message: &str) -> sys::JSValue {
+        let ctx = self.as_raw();
+
+        let error = unsafe { sys::JS_NewError(ctx) };
+        if let Ok(msg) = self.make_string(message) {
+            let atom = value::new_atom(ctx, "message");
+            unsafe {
+                sys::JS_SetProperty(ctx, error, atom, msg.into_raw());
+                value::free_atom(ctx, atom);
+            }
+        }
+
+        unsafe { sys::JS_Throw(ctx, error) }
+    }
+
+    pub(crate) unsafe fn from_opaque(raw: *mut sys::JSContext) -> Option<Context> {
+        let opaque = sys::JS_GetContextOpaque(raw);
+        if opaque.is_null() {
+            return None;
+        }
+
+        let weak = Weak::from_raw(opaque as *const ContextInner);
+        let upgraded = weak.upgrade().map(Context);
+        let _ = Weak::into_raw(weak);
+
+        upgraded
+    }
+
+    pub(crate) fn as_raw(&self) -> *mut sys::JSContext {
+        self.0.raw
+    }
+}
+
+#[cfg(feature = "async")]
+impl Context {
+    pub fn make_promise(&self) -> Result<(Value, Value, Value), Error> {
+        let mut args = [value::mkval(sys::JS_TAG_UNDEFINED, 0); 2];
+        let raw = unsafe { sys::JS_NewPromiseCapability(self.as_raw(), args.as_mut_ptr()) };
+
+        let promise = self.check(Value::from_raw(self.clone(), raw))?;
+        Ok((
+            promise,
+            Value::from_raw(self.clone(), args[0]),
+            Value::from_raw(self.clone(), args[1]),
+        ))
     }
 }

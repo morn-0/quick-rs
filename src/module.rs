@@ -1,36 +1,32 @@
 use crate::{
-    error::QuickError,
-    value::{self, Exception, JSValueRef},
+    error::Error,
+    value::{self, Value},
 };
 use quickjs_sys as sys;
 
 pub struct Module {
-    value: JSValueRef,
+    value: Value,
 }
 
 impl Module {
-    pub fn new(value: JSValueRef) -> Result<Self, QuickError> {
-        let function = value::dup_value(value.ctx().ptr(), value.val());
+    pub fn new(value: Value) -> Result<Self, Error> {
+        let ctx = value.context().clone();
+        let raw = value::dup(ctx.as_raw(), value.raw());
+        let raw = unsafe { sys::JS_EvalFunction(ctx.as_raw(), raw) };
 
-        let ret = unsafe { sys::JS_EvalFunction(value.ctx().ptr(), function) };
-        let ret = JSValueRef::from_value(value.ctx().clone(), ret);
-
-        if ret.tag() == sys::JS_TAG_EXCEPTION {
-            let exception = unsafe { sys::JS_GetException(value.ctx().ptr()) };
-            let exception = JSValueRef::from_value(value.ctx().clone(), exception);
-
-            Err(QuickError::Eval(Exception(exception).to_string()))
-        } else {
-            Ok(Module { value })
-        }
+        ctx.check(Value::from_raw(ctx.clone(), raw))?;
+        Ok(Module { value })
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Result<JSValueRef, QuickError> {
-        let module_ptr = self.value.ptr() as *mut _;
+    pub fn namespace(&self) -> Result<Value, Error> {
+        let ctx = self.value.context();
+        let ptr = value::ptr_of(self.value.raw()).cast::<sys::JSModuleDef>();
 
-        let namespace = unsafe { sys::JS_GetModuleNamespace(self.value.ctx().ptr(), module_ptr) };
-        let namespace = JSValueRef::from_value(self.value.ctx().clone(), namespace);
+        let raw = unsafe { sys::JS_GetModuleNamespace(ctx.as_raw(), ptr) };
+        ctx.check(Value::from_raw(ctx.clone(), raw))
+    }
 
-        namespace.get_property(name)
+    pub fn get(&self, name: impl AsRef<str>) -> Result<Value, Error> {
+        self.namespace()?.get_property(name)
     }
 }
