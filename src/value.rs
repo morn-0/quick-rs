@@ -63,9 +63,7 @@ pub(crate) fn free_atom(ctx: *mut sys::JSContext, atom: sys::JSAtom) {
     unsafe { sys::JS_FreeAtom(ctx, atom) }
 }
 
-/// 可作为 ArrayBuffer 元素、且可由 JS number（f64）收窄而来的基础数字类型。
 pub trait Number: Sized {
-    /// 把 JS ToNumber 得到的 f64 收窄为目标类型（Rust 饱和转换）。
     fn from_f64(value: f64) -> Self;
 }
 
@@ -254,10 +252,6 @@ impl<'a> ValueRef<'a> {
         }
     }
 
-    /// JS ToNumber 强转（等价 `Number(x)`）后收窄到 `T`。
-    ///
-    /// 字符串/bool/null 等会被强转，对象走 valueOf/toString；Symbol 等无法转换时抛异常。
-    /// 整型按 Rust 饱和规则收窄，不是 JS 的 ToInt32 回绕。
     pub fn to_number<T: Number>(&self) -> Result<T, Error> {
         let mut out = 0.0;
         let ret = unsafe { sys::JS_ToFloat64(self.ctx.as_raw(), &mut out, self.raw) };

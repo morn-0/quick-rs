@@ -14,7 +14,6 @@ use quickjs_sys as sys;
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
-    ffi::c_void,
     future::{poll_fn, Future},
     pin::Pin,
     ptr,
@@ -97,11 +96,11 @@ impl AsyncState {
     }
 }
 
-struct OpaqueGuard<'a>(&'a Runtime);
+struct AsyncGuard<'a>(&'a Runtime);
 
-impl Drop for OpaqueGuard<'_> {
+impl Drop for AsyncGuard<'_> {
     fn drop(&mut self) {
-        unsafe { sys::JS_SetRuntimeOpaque(self.0.as_raw(), ptr::null_mut()) };
+        self.0.state().exit_async();
     }
 }
 
@@ -127,15 +126,9 @@ impl Runtime {
         poll_fn(|cx| self.drive_idle(cx, &state)).await
     }
 
-    fn enter(&self, state: &AsyncState) -> OpaqueGuard<'_> {
-        assert!(
-            unsafe { sys::JS_GetRuntimeOpaque(self.as_raw()).is_null() },
-            "nested run_until/run is not supported"
-        );
-
-        let ptr = (state as *const AsyncState).cast::<c_void>().cast_mut();
-        unsafe { sys::JS_SetRuntimeOpaque(self.as_raw(), ptr) };
-        OpaqueGuard(self)
+    fn enter(&self, state: &AsyncState) -> AsyncGuard<'_> {
+        self.state().enter_async(state);
+        AsyncGuard(self)
     }
 
     fn drive<F: Future>(

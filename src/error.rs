@@ -24,6 +24,8 @@ impl Display for Exception {
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("execution interrupted")]
+    Interrupted,
     #[error("{0}")]
     Exception(Exception),
     #[error("type mismatch: expected {expected}, got tag {got}")]

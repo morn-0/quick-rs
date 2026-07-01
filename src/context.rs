@@ -158,6 +158,11 @@ impl Context {
 
     pub(crate) fn check(&self, value: Value) -> Result<Value, Error> {
         if value.tag() == sys::JS_TAG_EXCEPTION {
+            if self.runtime().state().interrupt_triggered() {
+                // 被 deadline/cancel 中止：清掉 JS 侧待决异常，归一成 Interrupted。
+                let _ = self.catch();
+                return Err(Error::Interrupted);
+            }
             Err(Error::Exception(self.catch()))
         } else {
             Ok(value)

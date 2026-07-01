@@ -3,17 +3,22 @@ use crate::runtime::event_loop::AsyncState;
 use crate::{context::Context, loader::UserLoader, value};
 use log::error;
 use quickjs_sys as sys;
+use state::{interrupt_handler, RuntimeState};
 use std::{
     ffi::{c_char, c_void, CStr},
     path::Path,
     rc::Rc,
+    time::Duration,
     {fs, ptr},
 };
 
 #[cfg(feature = "async")]
 pub(crate) mod event_loop;
+pub(crate) mod state;
 #[cfg(feature = "async")]
 pub(crate) mod timers;
+
+pub use state::Interrupt;
 
 #[cfg(feature = "mimalloc")]
 #[no_mangle]
@@ -114,6 +119,7 @@ extern "C" fn module_loader(
 pub(crate) struct RuntimeInner {
     raw: *mut sys::JSRuntime,
     loader: *mut Box<dyn UserLoader>,
+    state: RuntimeState,
 }
 
 impl Drop for RuntimeInner {
@@ -168,7 +174,21 @@ impl Runtime {
             );
         }
 
-        Runtime(Rc::new(RuntimeInner { raw, loader }))
+        let inner = Rc::new(RuntimeInner {
+            raw,
+            loader,
+            state: RuntimeState::new(),
+        });
+        unsafe {
+            sys::JS_SetInterruptHandler(
+                raw,
+                Some(interrupt_handler),
+                (&inner.state as *const RuntimeState)
+                    .cast::<c_void>()
+                    .cast_mut(),
+            );
+        }
+        Runtime(inner)
     }
 
     pub fn context(&self) -> Context {
@@ -179,9 +199,17 @@ impl Runtime {
         self.0.raw
     }
 
+    pub fn interrupt(&self, timeout: Option<Duration>) -> Interrupt {
+        self.0.state.interrupt(timeout)
+    }
+
+    pub(crate) fn state(&self) -> &RuntimeState {
+        &self.0.state
+    }
+
     #[cfg(feature = "async")]
     pub(crate) fn async_state(&self) -> Option<&AsyncState> {
-        unsafe { (sys::JS_GetRuntimeOpaque(self.as_raw()) as *const AsyncState).as_ref() }
+        self.0.state.async_state()
     }
 }
 

@@ -7,7 +7,10 @@
 //!
 //! 阈值取得很宽（真泄漏是数百 MB~GB，正常 < 10MB），对分配器抖动与并行噪音稳健。
 
-use quick_rs::{Context, Error, Function, Module, Runtime};
+use quick_rs::{
+    Context, Error, Function, JsClass, Method, MethodFn, Module, Runtime, Value, ValueRef,
+};
+use std::time::Duration;
 
 fn rss_kb() -> i64 {
     let s = std::fs::read_to_string("/proc/self/statm").unwrap();
@@ -55,6 +58,52 @@ fn exercise_sync(ctx: &Context) {
     let _ = buffer.to_buffer::<u8>().unwrap();
 }
 
+struct Tally {
+    n: i64,
+}
+
+fn tally_add(
+    t: &mut Tally,
+    ctx: &Context,
+    _this: ValueRef,
+    _args: &[ValueRef],
+) -> Result<Value, Error> {
+    t.n += 1;
+    Ok(ctx.make_int(t.n as i32))
+}
+
+impl JsClass for Tally {
+    const NAME: &'static str = "Tally";
+    const METHODS: &'static [Method<Self>] = &[Method {
+        name: "add",
+        argc: 0,
+        func: MethodFn::Mut(tally_add),
+    }];
+
+    fn constructor(_ctx: &Context, _args: &[ValueRef]) -> Result<Self, Error> {
+        Ok(Tally { n: 0 })
+    }
+}
+
+/// 造大量实例、调方法：实例应在 GC 时经 finalizer 释放（`Box<RefCell<T>>` 不累积）。
+fn exercise_class(ctx: &Context) {
+    let _ = ctx
+        .eval_global(
+            "for (let i = 0; i < 100; i++) { const t = new Tally(); t.add(); t.add(); }",
+            "t",
+        )
+        .unwrap();
+}
+
+/// 反复武装超时中止死循环 + 正常 eval：验证中断路径（异常清理、令牌）无累积。
+fn exercise_interrupt(rt: &Runtime, ctx: &Context) {
+    {
+        let _guard = rt.interrupt(Some(Duration::from_millis(2)));
+        let _ = ctx.eval_global("while (true) {}", "t");
+    }
+    let _ = ctx.eval_global("1 + 1", "t").unwrap();
+}
+
 #[test]
 fn sync_create_drop_no_leak() {
     for _ in 0..50 {
@@ -87,6 +136,63 @@ fn sync_same_runtime_no_leak() {
     }
     let after = rss_kb();
     assert_no_leak("sync_same_runtime", before, after, 50_000);
+}
+
+#[test]
+fn class_create_drop_no_leak() {
+    for _ in 0..30 {
+        let rt = Runtime::new();
+        let ctx = rt.context();
+        ctx.global()
+            .set_property("Tally", ctx.make_class::<Tally>().unwrap())
+            .unwrap();
+        exercise_class(&ctx);
+    }
+    let before = rss_kb();
+    for _ in 0..1000 {
+        let rt = Runtime::new();
+        let ctx = rt.context();
+        ctx.global()
+            .set_property("Tally", ctx.make_class::<Tally>().unwrap())
+            .unwrap();
+        exercise_class(&ctx);
+    }
+    let after = rss_kb();
+    assert_no_leak("class_create_drop", before, after, 100_000);
+}
+
+#[test]
+fn class_same_runtime_no_leak() {
+    let rt = Runtime::new();
+    let ctx = rt.context();
+    ctx.global()
+        .set_property("Tally", ctx.make_class::<Tally>().unwrap())
+        .unwrap();
+    for _ in 0..100 {
+        exercise_class(&ctx);
+    }
+    let before = rss_kb();
+    // 50 万实例 create+finalize，RSS 应平。
+    for _ in 0..5000 {
+        exercise_class(&ctx);
+    }
+    let after = rss_kb();
+    assert_no_leak("class_same_runtime", before, after, 50_000);
+}
+
+#[test]
+fn interrupt_same_runtime_no_leak() {
+    let rt = Runtime::new();
+    let ctx = rt.context();
+    for _ in 0..20 {
+        exercise_interrupt(&rt, &ctx);
+    }
+    let before = rss_kb();
+    for _ in 0..200 {
+        exercise_interrupt(&rt, &ctx);
+    }
+    let after = rss_kb();
+    assert_no_leak("interrupt_same_runtime", before, after, 50_000);
 }
 
 #[cfg(feature = "async")]

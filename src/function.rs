@@ -100,11 +100,14 @@ mod closure {
     static CLASS_ID: OnceLock<sys::JSClassID> = OnceLock::new();
 
     pub(crate) fn register_class(rt: *mut sys::JSRuntime) {
-        let id = *CLASS_ID.get_or_init(|| {
-            let mut id: sys::JSClassID = 0;
-            unsafe { sys::JS_NewClassID(rt, &mut id) };
-            id
-        });
+        let mut fresh: sys::JSClassID = 0;
+        unsafe { sys::JS_NewClassID(rt, &mut fresh) };
+        let id = *CLASS_ID.get_or_init(|| fresh);
+        debug_assert_eq!(
+            fresh, id,
+            "closure class id must be identical across runtimes"
+        );
+
         let def = sys::JSClassDef {
             class_name: c"RustClosure".as_ptr(),
             finalizer: Some(finalizer),
